@@ -17,7 +17,7 @@
 #include "utils/builtins.h"
 #include "libpq/pqformat.h"
 
-#include "complex.h"
+#include "chess.h"
 
 PG_MODULE_MAGIC;
 
@@ -38,16 +38,155 @@ complex_make(double a, double b)
   return c;
 }
 
+static Chessgame *
+chessgame_make(char *moves, int size)
+{
+  chessgame *c = palloc0(sizeof(chessgame));
+  c->moves = moves;
+  c->size = size;
+  return c;
+}
+
 /*****************************************************************************/
 
-static Complex *
-complex_parse(char *str)
+static SANmove *
+sanmove_parse(char *str)
 {
-  double a, b;
+  SANmove *c = palloc0(sizeof(SANmove));
+  //split the input into substrings devided by spaces
+  char *token = strtok(str, " ");
+  //iterate over the substrings
+  while (token != NULL)
+  {
+    //if the substring is a number, it is the move number
+    if (atoi(token) != 0)
+    {
+      break;
+    }
+    //if the first chararacter is K or Q or R or B or N, store the the piece else store p in piece we will call pawns p
+    if (token[0] == 'K' || token[0] == 'Q' || token[0] == 'R' || token[0] == 'B' || token[0] == 'N')
+    {
+      c->piece = token[0];
+    }
+    else
+    {
+      c->piece = 'p';
+    }
+    // if the substring contains an x, it is a capture
+    if (strchr(token, 'x') != NULL)
+    {
+      c->capture = true;
+    }
+    //if the substring contains a +, it is a check
+    if (strchr(token, '+') != NULL)
+    {
+      c->check = true;
+    }
+    //if the substring contains a #, it is a mate
+    if (strchr(token, '#') != NULL)
+    {
+      c->mate = true;
+    }
+    //if the substring contains a = or a '(' and ')' or a '/', it is a promotion
+    if (strchr(token, '=') != NULL || (strchr(token, '(') != NULL && strchr(token, ')') != NULL) || strchr(token, '/') != NULL)
+    {
+      c->promotion = true;
+    }
+    //if the substring contains a 0-0 or 0-0-0 or O-O or O-O-O, it is a castle
+    if (strstr(token, "0-0") != NULL || strstr(token, "O-O") != NULL)
+    {
+      c->castle = true;
+    }
+    //if the substring contains a =, it is a drawoffer
+    if (strchr(token, '=') != NULL)
+    {
+      c->drawoffer = true;
+    }
+
+    //iterate through the characters of the substring backwards
+    bool file_found = false;
+    bool rank_found = false;
+    for (int i = strlen(token) - 1; i >= 0; i--)
+    {
+      //if the character is a number, it is the rank
+      if (atoi(token[i]) >= 1 && atoi(token[i]) <= 8)
+      {
+        if (rank_found==false){
+          c->rank = atoi(token[i]);
+          rank_found = true;
+        } else
+        {
+          c->from_rank = atoi(token[i]);
+        }
+      }
+      //if the character is a letter, it is the file
+      if (token[i] >= 'a' && token[i] <= 'h')
+      {
+        if(file_found==false){
+          c->file = token[i];
+          file_found = true;
+        } else
+        {
+          c->from_file = token[i];
+        }
+      }
+    }
+
+    // step to the next substring
+    token = strtok(NULL, " ");
+  }
+  return c;
+}
+
+static Chessgame *
+chessgame_parse(char *str)
+{
+  //remove line breaks
+  str = strtok(str, "\n");
+  // steps in game 
+  int step = 0;
+  //create a 2 dim dynamic array for storing all the move pairs
+  SANmove **allmoves = palloc0(2*sizeof(SANmove));
+
+  
+  //iterate the str until a '.' is found, and process the string between the two dots, the this for the whole string
+  while (str != NULL)
+  {
+    char *dot = strchr(str, '.');
+    if (dot != NULL)
+    {
+      char *dot2 = strchr(dot + 1, '.');
+      if (dot2 != NULL)
+      {
+        // create an array to store 2 sanmoves and allocate it
+        SANmove *sanmoves[2];
+        sanmoves = palloc0(2*sizeof(SANmove));
+
+        char *san = strndup(dot + 1, dot2 - dot - 1);
+        // split by spaces and process san with sanmove_parse each substring
+        char *token = strtok(san, " ");
+        int moves = 0;
+        while (token != NULL)
+        {
+          sanmoves[moves] = sanmove_parse(token);
+          token = strtok(NULL, " ");
+          moves++;
+        }
+        // store the sanmove in allmoves
+        allmoves[step] = sanmoves;
+        
+      }
+    }
+    str = strtok(NULL, "\n");
+    step++;
+  }
+
+/*
   if (sscanf(str, " ( %lf , %lf )", &a, &b) != 2)
     ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
       errmsg("invalid input syntax for type %s: \"%s\"", "complex", str)));
-  return complex_make(a, b);
+      */
+  return chessgame_make(allmoves, step);
 }
 
 static char *

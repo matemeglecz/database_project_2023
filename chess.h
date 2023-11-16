@@ -9,6 +9,31 @@ typedef struct
             b;
 } Complex;
 
+/* deine one move in SAN */
+typedef struct
+{
+  int       piece;
+  char      file;
+  int       rank;
+  char      from_file;
+  int       from_rank;
+  bool      capture;
+  bool      promotion;
+  bool      check;
+  bool      checkmate;
+  bool      drawoffer;
+  bool      castling;
+} SANMove;
+
+/* define SAN */
+typedef struct
+{
+  // dynamic list of SANmoves every row contains 2 moves for white and black
+  SANMove  *moves;
+  int       size;
+} Chessgame;
+
+
 /* fmgr macros complex type */
 
 #define DatumGetComplexP(X)  ((Complex *) DatumGetPointer(X))
