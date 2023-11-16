@@ -39,7 +39,7 @@ complex_make(double a, double b)
 }
 
 static Chessgame *
-chessgame_make(char *moves, int size)
+chessgame_make(char **moves, int size)
 {
   chessgame *c = palloc0(sizeof(chessgame));
   c->moves = moves;

@@ -29,7 +29,7 @@ typedef struct
 typedef struct
 {
   // dynamic list of SANmoves every row contains 2 moves for white and black
-  SANMove  *moves;
+  SANMove  **moves;
   int       size;
 } Chessgame;
 
