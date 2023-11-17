@@ -21,12 +21,27 @@
 
 PG_MODULE_MAGIC;
 
+char *strndup(char *str, int chars)
+{
+    char *buffer;
+    int n;
+
+    buffer = (char *) malloc(chars +1);
+    if (buffer)
+    {
+        for (n = 0; ((n < chars) && (str[n] != 0)) ; n++) buffer[n] = str[n];
+        buffer[n] = 0;
+    }
+
+    return buffer;
+}
+
 /*****************************************************************************/
 
 static Complex *
 complex_make(double a, double b)
 {
-  Complex *c = palloc0(sizeof(Complex));
+  Complex *c = palloc(sizeof(Complex));
   c->a = a;
   c->b = b;
   /* this is not superflous code, we need
@@ -39,9 +54,9 @@ complex_make(double a, double b)
 }
 
 static Chessgame *
-chessgame_make(char **moves, int size)
+chessgame_make(SANmove **moves, int size)
 {
-  chessgame *c = palloc0(sizeof(chessgame));
+  Chessgame *c = malloc(sizeof(Chessgame));
   c->moves = moves;
   c->size = size;
   return c;
@@ -49,106 +64,121 @@ chessgame_make(char **moves, int size)
 
 /*****************************************************************************/
 
-static SANmove *
-sanmove_parse(char *str)
+static SANmove
+sanmove_parse(char *in)
 {
-  SANmove *c = palloc0(sizeof(SANmove));
+  SANmove c;
+  // initialize all the booleans to false
+    c.capture = false;
+    c.promotion = false;
+    c.check = false;
+    c.checkmate = false;
+    c.drawoffer = false;
+    c.castle = false;
+    // initialize all the chars to 0
+    c.piece = '0';
+    c.file = '0';
+    c.rank = 0;
+    c.from_file = '0';
+    c.from_rank = 0;
+  //copy the input string to a new string
+    char *str = malloc(sizeof(in));
+    strcpy(str, in);
   //split the input into substrings devided by spaces
-  char *token = strtok(str, " ");
-  //iterate over the substrings
-  while (token != NULL)
-  {
+
     //if the substring is a number, it is the move number
-    if (atoi(token) != 0)
+    if (atoi(in) != 0)
     {
-      break;
+      return c;
     }
     //if the first chararacter is K or Q or R or B or N, store the the piece else store p in piece we will call pawns p
-    if (token[0] == 'K' || token[0] == 'Q' || token[0] == 'R' || token[0] == 'B' || token[0] == 'N')
+    if (in[0] == 'K' || in[0] == 'Q' || in[0] == 'R' || in[0] == 'B' || in[0] == 'N')
     {
-      c->piece = token[0];
+      c.piece = in[0];
     }
     else
     {
-      c->piece = 'p';
+      c.piece = 'p';
     }
     // if the substring contains an x, it is a capture
-    if (strchr(token, 'x') != NULL)
+    if (strchr(in, 'x') != NULL)
     {
-      c->capture = true;
+      c.capture = true;
     }
     //if the substring contains a +, it is a check
-    if (strchr(token, '+') != NULL)
+    if (strchr(in, '+') != NULL)
     {
-      c->check = true;
+      c.check = true;
     }
     //if the substring contains a #, it is a mate
-    if (strchr(token, '#') != NULL)
+    if (strchr(in, '#') != NULL)
     {
-      c->mate = true;
+      c.checkmate = true;
     }
     //if the substring contains a = or a '(' and ')' or a '/', it is a promotion
-    if (strchr(token, '=') != NULL || (strchr(token, '(') != NULL && strchr(token, ')') != NULL) || strchr(token, '/') != NULL)
+    if (strchr(in, '=') != NULL || (strchr(in, '(') != NULL && strchr(in, ')') != NULL) || strchr(in, '/') != NULL)
     {
-      c->promotion = true;
+      c.promotion = true;
     }
     //if the substring contains a 0-0 or 0-0-0 or O-O or O-O-O, it is a castle
-    if (strstr(token, "0-0") != NULL || strstr(token, "O-O") != NULL)
+    if (strstr(in, "0-0") != NULL || strstr(in, "O-O") != NULL)
     {
-      c->castle = true;
+      c.castle = true;
     }
     //if the substring contains a =, it is a drawoffer
-    if (strchr(token, '=') != NULL)
+    if (strchr(in, '=') != NULL)
     {
-      c->drawoffer = true;
+      c.drawoffer = true;
     }
 
     //iterate through the characters of the substring backwards
     bool file_found = false;
     bool rank_found = false;
-    for (int i = strlen(token) - 1; i >= 0; i--)
+    for (int i = strlen(in) - 1; i >= 0; i--)
     {
       //if the character is a number, it is the rank
-      if (atoi(token[i]) >= 1 && atoi(token[i]) <= 8)
+      if (atoi(&in[i]) >= 1 && atoi(&in[i]) <= 8)
       {
         if (rank_found==false){
-          c->rank = atoi(token[i]);
+          c.rank = atoi(&in[i]);
           rank_found = true;
         } else
         {
-          c->from_rank = atoi(token[i]);
+          c.from_rank = atoi(&in[i]);
         }
       }
       //if the character is a letter, it is the file
-      if (token[i] >= 'a' && token[i] <= 'h')
+      if (in[i] >= 'a' && in[i] <= 'h')
       {
         if(file_found==false){
-          c->file = token[i];
+          c.file = in[i];
           file_found = true;
         } else
         {
-          c->from_file = token[i];
+          c.from_file = in[i];
         }
       }
     }
 
-    // step to the next substring
-    token = strtok(NULL, " ");
-  }
+
   return c;
 }
 
 static Chessgame *
-chessgame_parse(char *str)
+chessgame_parse(char in[])
 {
   //remove line breaks
-  str = strtok(str, "\n");
-  // steps in game 
+  char* str = strtok(in, "\n");
+  // steps in game
   int step = 0;
-  //create a 2 dim dynamic array for storing all the move pairs
-  SANmove **allmoves = palloc0(2*sizeof(SANmove));
+  //create a 2 dim dynamic array for storing all the move pairs 2 by 100
+  SANmove **allmoves = (SANmove **)malloc(sizeof(SANmove*) * 100);
+  for (int i = 0; i < 100; ++i)
+  {
+      allmoves[i] = (SANmove *)malloc(2 * sizeof(SANmove));
 
-  
+  }
+
   //iterate the str until a '.' is found, and process the string between the two dots, the this for the whole string
   while (str != NULL)
   {
@@ -156,29 +186,40 @@ chessgame_parse(char *str)
     if (dot != NULL)
     {
       char *dot2 = strchr(dot + 1, '.');
-      if (dot2 != NULL)
+        bool end_reached = false;
+      while (dot != NULL && !end_reached)
       {
-        // create an array to store 2 sanmoves and allocate it
-        SANmove *sanmoves[2];
-        sanmoves = palloc0(2*sizeof(SANmove));
-
-        char *san = strndup(dot + 1, dot2 - dot - 1);
+        // create an array to store 2 sanmoves
+        SANmove sanmoves[2];
+        // if dot2 and dot is the same than dot2 is the end of the string
+        if (dot2 == NULL)
+        {
+          dot2 = strchr(dot + 1, '\0');
+            end_reached = true;
+        }
+        char san[dot2 - dot];
+        strcpy(san, strndup(dot + 1, dot2 - dot - 1));
+          san[dot2 - dot - 1] = '\0';
         // split by spaces and process san with sanmove_parse each substring
-        char *token = strtok(san, " ");
+        char delim[] = " ";
+        char *token = strtok(san, delim);
         int moves = 0;
-        while (token != NULL)
+        while (token != NULL && moves < 2)
         {
           sanmoves[moves] = sanmove_parse(token);
-          token = strtok(NULL, " ");
+          token = strtok(NULL, delim);
           moves++;
         }
         // store the sanmove in allmoves
-        allmoves[step] = sanmoves;
-        
+      allmoves[step][0] = sanmoves[0];
+      allmoves[step][1] = sanmoves[1];
+        dot = dot2 + 1;
+        dot2 = strchr(dot, '.');
+      step++;
       }
     }
     str = strtok(NULL, "\n");
-    step++;
+
   }
 
 /*

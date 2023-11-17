@@ -12,7 +12,7 @@ typedef struct
 /* deine one move in SAN */
 typedef struct
 {
-  int       piece;
+  char       piece;
   char      file;
   int       rank;
   char      from_file;
@@ -22,14 +22,14 @@ typedef struct
   bool      check;
   bool      checkmate;
   bool      drawoffer;
-  bool      castling;
-} SANMove;
+  bool      castle;
+} SANmove;
 
 /* define SAN */
 typedef struct
 {
   // dynamic list of SANmoves every row contains 2 moves for white and black
-  SANMove  **moves;
+  SANmove  **moves;
   int       size;
 } Chessgame;
 
