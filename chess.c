@@ -43,8 +43,11 @@ static Chessgame *
 chessgame_make(char* game)
 {
   Chessgame *c = palloc(sizeof(Chessgame));
-  c->game = game;
 
+  // copy the string to the game
+  c->game = palloc(sizeof(char) * strlen(game));
+  strcpy(c->game, game);
+  
 
   if(c->game == NULL)
   {
@@ -252,9 +255,24 @@ sanmove_parse(char *in)
 static Chessgame *
 chessgame_parse(char in[])
 {
-   
+    //remove line breaks and copy the input string to a new string
+  char *str = palloc(sizeof(char) * strlen(in));
+  int len = strlen(in);
+  int j = 0;
+  for (int i = 0; i < len; ++i)
+  {
+      if (in[i] != '\n' && in[i] != '\r' && in[i] != '\t')
+      {
+          str[j] = in[i];
+          j++;
+      }     
+  }
+
+  str[j] = '\0';
+
   //remove line breaks
-  char* str = strtok(in, "\n");
+  //str = strtok(str, "\n");
+
   // steps in game
   int step = 0;
   //create a 2 dim dynamic array for storing all the move pairs 2 by 100
@@ -267,48 +285,44 @@ chessgame_parse(char in[])
 
 
   //iterate the str until a '.' is found, and process the string between the two dots, the this for the whole string
-  while (str != NULL)
+ 
+  char *dot = strchr(str, '.');
+  if (dot != NULL)
   {
-    char *dot = strchr(str, '.');
-    if (dot != NULL)
+    char *dot2 = strchr(dot + 1, '.');
+    bool end_reached = false;
+    while (dot != NULL && !end_reached)
     {
-      char *dot2 = strchr(dot + 1, '.');
-        bool end_reached = false;
-      while (dot != NULL && !end_reached)
+      // create an array to store 2 sanmoves
+      SANmove sanmoves[2];
+      // if dot2 and dot is the same than dot2 is the end of the string
+      if (dot2 == NULL)
       {
-        // create an array to store 2 sanmoves
-        SANmove sanmoves[2];
-        // if dot2 and dot is the same than dot2 is the end of the string
-        if (dot2 == NULL)
-        {
-          dot2 = strchr(dot + 1, '\0');
-            end_reached = true;
-        }
-        //char san[dot2 - dot];
-        char san[64];
-        strcpy(san, strndup(dot + 1, dot2 - dot - 1));
-          san[dot2 - dot - 1] = '\0';
-        // split by spaces and process san with sanmove_parse each substring
-        char delim[] = " ";
-        char *token = strtok(san, delim);
-        int moves = 0;
-        while (token != NULL && moves < 2)
-        {
-          sanmoves[moves] = sanmove_parse(token);
-          token = strtok(NULL, delim);
-          moves++;
-        }
-        // store the sanmove in allmoves
-      allmoves[step][0] = sanmoves[0];
-      allmoves[step][1] = sanmoves[1];
-        dot = dot2 + 1;
-        dot2 = strchr(dot, '.');
-      step++;
-      
+        dot2 = strchr(dot + 1, '\0');
+          end_reached = true;
       }
+      //char san[dot2 - dot];
+      char san[64];
+      strcpy(san, strndup(dot + 1, dot2 - dot - 1));
+        san[dot2 - dot - 1] = '\0';
+      // split by spaces and process san with sanmove_parse each substring
+      char delim[] = " ";
+      char *token = strtok(san, delim);
+      int moves = 0;
+      while (token != NULL && moves < 2)
+      {
+        sanmoves[moves] = sanmove_parse(token);
+        token = strtok(NULL, delim);
+        moves++;
+      }
+      // store the sanmove in allmoves
+    allmoves[step][0] = sanmoves[0];
+    allmoves[step][1] = sanmoves[1];
+      dot = dot2 + 1;
+      dot2 = strchr(dot, '.');
+    step++;
+    
     }
-    str = strtok(NULL, "\n");
-
   }
   
 
@@ -345,7 +359,7 @@ Datum
 chessgame_out(PG_FUNCTION_ARGS)
 {
   Chessgame *c = PG_GETARG_CHESSGAME_P(0);
-  char *result = c->game;
+  char* result = c->game;
   PG_FREE_IF_COPY(c, 0);
   PG_RETURN_CSTRING(result);
 }
@@ -388,7 +402,7 @@ chessgame_cast_to_text(PG_FUNCTION_ARGS)
 {
   Chessgame *c  = PG_GETARG_CHESSGAME_P(0);
   text *out = (text *)DirectFunctionCall1(textin,
-            PointerGetDatum(&c->game));
+            PointerGetDatum(c->game));
   PG_FREE_IF_COPY(c, 0);
   PG_RETURN_TEXT_P(out);
 }
