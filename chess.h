@@ -31,7 +31,14 @@ typedef struct
   // dynamic list of SANmoves every row contains 2 moves for white and black
   SANmove  **moves;
   int       size;
+} Chessgame_helper;
+
+typedef struct 
+{
+  char* game;
 } Chessgame;
+
+
 
 
 /* fmgr macros complex type */
@@ -40,6 +47,11 @@ typedef struct
 #define ComplexPGetDatum(X)  PointerGetDatum(X)
 #define PG_GETARG_COMPLEX_P(n) DatumGetComplexP(PG_GETARG_DATUM(n))
 #define PG_RETURN_COMPLEX_P(x) return ComplexPGetDatum(x)
+
+#define DatumGetChessgameP(X)  ((Chessgame *) DatumGetPointer(X))
+#define ChessgamePGetDatum(X)  PointerGetDatum(X)
+#define PG_GETARG_CHESSGAME_P(n) DatumGetChessgameP(PG_GETARG_DATUM(n))
+#define PG_RETURN_CHESSGAME_P(x) return ChessgamePGetDatum(x)
 
 /*****************************************************************************/
 

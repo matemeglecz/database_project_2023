@@ -1,12 +1,11 @@
-MODULE_big	= complex
+MODULE_big	= chess
 OBJS = \
 	$(WIN32RES) \
-	complex.o \
-	complex_btree.o
+	chess.o 
 
-EXTENSION   = complex
-DATA        = complex--1.0.sql
-HEADERS_complex = complex.h
+EXTENSION   = chess
+DATA        = chess--1.0.sql
+HEADERS_chess = chess.h
 
 PG_CONFIG ?= pg_config
 PGXS = $(shell $(PG_CONFIG) --pgxs)
