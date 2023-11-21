@@ -142,8 +142,10 @@ chessgame_to_str(const Chessgame_helper *c)
         strcat(result, move);
         strcat(result, sanmove_to_str(&c->moves[i][0]));
         strcat(result, " ");
-        strcat(result, sanmove_to_str(&c->moves[i][1]));
-        strcat(result, " ");
+        if(c->moves[i][1].piece != '0'){
+          strcat(result, sanmove_to_str(&c->moves[i][1]));
+          strcat(result, " ");
+        }
 
     }
 
@@ -295,6 +297,10 @@ chessgame_parse(char in[])
     {
       // create an array to store 2 sanmoves
       SANmove sanmoves[2];
+      // initalize sanmives with empty sanmoves
+      sanmoves[0] = sanmove_parse("");
+      sanmoves[1] = sanmove_parse("");
+
       // if dot2 and dot is the same than dot2 is the end of the string
       if (dot2 == NULL)
       {
