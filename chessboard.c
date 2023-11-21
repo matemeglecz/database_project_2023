@@ -1,127 +1,239 @@
 #include "postgres.h"
 #include "fmgr.h"
 #include "utils/builtins.h"
-
-#include "chessBoard.h"
+#include "libpq/pqformat.h"
+#include "chessboard.h"
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(chessboard_constructor);
-PG_FUNCTION_INFO_V1(chessboard_get_piece);
-PG_FUNCTION_INFO_V1(chessboard_get_row);
+/*****************************************************************************/
+/* Function declarations for input/output and conversion */
+
 PG_FUNCTION_INFO_V1(chessboard_in);
+Datum chessboard_in(PG_FUNCTION_ARGS);
+
 PG_FUNCTION_INFO_V1(chessboard_out);
-PG_FUNCTION_INFO_V1(chessboard_send);
+Datum chessboard_out(PG_FUNCTION_ARGS);
+
 PG_FUNCTION_INFO_V1(chessboard_recv);
+Datum chessboard_recv(PG_FUNCTION_ARGS);
 
-Datum chessboard_constructor(PG_FUNCTION_ARGS) {
-    text *input = PG_GETARG_TEXT_P(0);
-    char *input_str = text_to_cstring(input);
+PG_FUNCTION_INFO_V1(chessboard_send);
+Datum chessboard_send(PG_FUNCTION_ARGS);
 
-    // Assurez-vous que la chaîne a la longueur attendue (64 pour un échiquier 8x8)
-    if (strlen(input_str) != 64) {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid ChessBoard string")));
-    }
+PG_FUNCTION_INFO_V1(chessboard_constructor);
+Datum chessboard_constructor(PG_FUNCTION_ARGS);
 
-    ChessBoard *result = (ChessBoard *) palloc(sizeof(ChessBoard));
+PG_FUNCTION_INFO_V1(chessboard_get_piece);
+Datum chessboard_get_piece(PG_FUNCTION_ARGS);
 
-    // Remplir le tableau bidimensionnel
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            result->data[i][j] = input_str[i * 8 + j];
-        }
-    }
+PG_FUNCTION_INFO_V1(chessboard_set_piece);
+Datum chessboard_set_piece(PG_FUNCTION_ARGS);
 
-    PG_RETURN_POINTER(result);
+PG_FUNCTION_INFO_V1(chessboard_clear_board);
+Datum chessboard_clear_board(PG_FUNCTION_ARGS);
+
+/*****************************************************************************/
+/* Function definitions */
+
+
+static ChessBoard *
+chessboard_make(char* fen)
+{
+    ChessBoard *cb = palloc(sizeof(ChessBoard));
+
+    // copy the FEN string to the board
+    strncpy(cb->data, fen, sizeof(cb->data) - 1);
+    cb->data[sizeof(cb->data) - 1] = '\0';
+
+    // Additional validation logic can be added here if needed
+
+    return cb;
 }
 
-Datum chessboard_get_piece(PG_FUNCTION_ARGS) {
-    ChessBoard *board = (ChessBoard *) PG_GETARG_POINTER(0);
-    int32 row = PG_GETARG_INT32(1);
-    int32 col = PG_GETARG_INT32(2);
+/* Input function */
+Datum
+chessboard_in(PG_FUNCTION_ARGS)
+{
+    char* str = PG_GETARG_CSTRING(0);
+    ChessBoard* board = set_board_from_fen(str);
+    PG_RETURN_CHESSBOARD_P(board);
+}
 
-    // Assurez-vous que les indices sont valides
-    if (row < 0 || row >= 8 || col < 0 || col >= 8) {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid indices for ChessBoard")));
-    }
+/* Output function */
+Datum
+chessboard_out(PG_FUNCTION_ARGS)
+{
+    ChessBoard* board = PG_GETARG_CHESSBOARD_P(0);
+    char* result = get_fen_notation(board);
+    PG_RETURN_CSTRING(result);
+}
 
-    char piece = board->data[row][col];
+/* Receive function */
+Datum
+chessboard_recv(PG_FUNCTION_ARGS)
+{
+    StringInfo buf = (StringInfo) PG_GETARG_POINTER(0);
+    ChessBoard* board = (ChessBoard *) palloc(sizeof(ChessBoard));
+    memcpy(board, pq_getmsgbytes(buf, sizeof(ChessBoard)), sizeof(ChessBoard));
+    PG_RETURN_CHESSBOARD_P(board);
+}
 
+/* Send function */
+Datum
+chessboard_send(PG_FUNCTION_ARGS)
+{
+    ChessBoard* board = PG_GETARG_CHESSBOARD_P(0);
+    StringInfoData buf;
+    pq_begintypsend(&buf);
+    pq_sendbytes(&buf, (char *)board, sizeof(ChessBoard));
+    PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
+}
+
+/* Constructor function */
+Datum
+chessboard_constructor(PG_FUNCTION_ARGS)
+{
+    char* fen = PG_GETARG_CSTRING(0);
+    ChessBoard* board = set_board_from_fen(fen);
+    PG_RETURN_CHESSBOARD_P(board);
+}
+
+/* Accessor function */
+Datum
+chessboard_get_piece(PG_FUNCTION_ARGS)
+{
+    ChessBoard* board = PG_GETARG_CHESSBOARD_P(0);
+    int rank = PG_GETARG_INT32(1);
+    int file = PG_GETARG_INT32(2);
+
+    // Perform bounds checking
+    if (rank < 1 || rank > 8 || file < 1 || file > 8)
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("Invalid board coordinates")));
+
+    char piece = board->data[(rank - 1) * 8 + (file - 1)];
     PG_RETURN_CHAR(piece);
 }
 
-Datum chessboard_get_row(PG_FUNCTION_ARGS) {
-    ChessBoard *board = (ChessBoard *) PG_GETARG_POINTER(0);
-    int32 row = PG_GETARG_INT32(1);
+/* Modifier function */
+Datum
+chessboard_set_piece(PG_FUNCTION_ARGS)
+{
+    ChessBoard* board = PG_GETARG_CHESSBOARD_P(0);
+    int rank = PG_GETARG_INT32(1);
+    int file = PG_GETARG_INT32(2);
+    char piece = PG_GETARG_CHAR(3);
 
-    // Assurez-vous que la ligne est valide
-    if (row < 0 || row >= 8) {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid row for ChessBoard")));
-    }
+    // Perform bounds checking
+    if (rank < 1 || rank > 8 || file < 1 || file > 8)
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("Invalid board coordinates")));
 
-    text *result = palloc(VARHDRSZ + 9);  // Longueur maximale d'une ligne + en-tête de texte
-    SET_VARSIZE(result, VARHDRSZ + 8);
-    memcpy(VARDATA(result), board->data[row], 8);
+    // Validate piece
+    if (!(piece == '0' || (piece >= 'a' && piece <= 'z') || (piece >= 'A' && piece <= 'Z')))
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("Invalid chess piece")));
 
-    PG_RETURN_TEXT_P(result);
+    // Set the piece on the board
+    board->data[(rank - 1) * 8 + (file - 1)] = piece;
+
+    PG_RETURN_CHESSBOARD_P(board);
 }
 
-Datum chessboard_in(PG_FUNCTION_ARGS) {
-    char *input_str = PG_GETARG_CSTRING(0);
-    ChessBoard *result = (ChessBoard *) palloc(sizeof(ChessBoard));
+/* Utility function to clear the board */
+Datum
+chessboard_clear_board(PG_FUNCTION_ARGS)
+{
+    ChessBoard* board = PG_GETARG_CHESSBOARD_P(0);
 
-    // Assurez-vous que la chaîne a la longueur attendue (64 pour un échiquier 8x8)
-    if (strlen(input_str) != 64) {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid ChessBoard string")));
-    }
+    // Clear the board
+    for (int i = 0; i < 64; ++i)
+        board->data[i] = '0';
 
-    // Remplir le tableau bidimensionnel
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            result->data[i][j] = input_str[i * 8 + j];
+    PG_RETURN_CHESSBOARD_P(board);
+}
+
+/* Utility function to get FEN notation from ChessBoard */
+char*
+get_fen_notation(ChessBoard* board)
+{
+    char* result = palloc(sizeof(char) * 80);
+    int index = 0;
+    int emptyCount = 0;
+
+    for (int rank = 8; rank >= 1; --rank)
+    {
+        for (int file = 1; file <= 8; ++file)
+        {
+            char piece = board->data[(rank - 1) * 8 + (file - 1)];
+
+            if (piece == '0')
+            {
+                // Empty square
+                ++emptyCount;
+            }
+            else
+            {
+                // Piece found
+                if (emptyCount > 0)
+                {
+                    result[index++] = emptyCount + '0';
+                    emptyCount = 0;
+                }
+                result[index++] = piece;
+            }
         }
-    }
 
-    PG_RETURN_POINTER(result);
-}
-
-Datum chessboard_out(PG_FUNCTION_ARGS) {
-    ChessBoard *board = (ChessBoard *) PG_GETARG_POINTER(0);
-    char *output_str = palloc(65);  // 64 caractères + 1 pour le terminateur de chaîne
-
-    // Convertir le tableau bidimensionnel en une chaîne de caractères
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            output_str[i * 8 + j] = board->data[i][j];
+        if (emptyCount > 0)
+        {
+            result[index++] = emptyCount + '0';
+            emptyCount = 0;
         }
+
+        if (rank > 1)
+            result[index++] = '/';
     }
 
-    output_str[64] = '\0';
+    result[index] = '\0';
 
-    PG_RETURN_CSTRING(output_str);
+    return result;
 }
 
-Datum chessboard_send(PG_FUNCTION_ARGS) {
-    ChessBoard *board = (ChessBoard *) PG_GETARG_POINTER(0);
-    bytea *result;
+/* Utility function to set ChessBoard from FEN notation */
+ChessBoard*
+set_board_from_fen(const char* fen)
+{
+    ChessBoard* board = palloc(sizeof(ChessBoard));
+    int index = 0;
+    int rank = 8;
+    int file = 1;
 
-    result = (bytea *) palloc(VARHDRSZ + sizeof(ChessBoard));
-    SET_VARSIZE(result, VARHDRSZ + sizeof(ChessBoard));
-    memcpy(VARDATA(result), board, sizeof(ChessBoard));
+    while (*fen != '\0')
+    {
+        if (*fen >= '1' && *fen <= '8')
+        {
+            // Empty squares
+            int count = *fen - '0';
+            for (int i = 0; i < count; ++i)
+                board->data[index++] = '0';
+            file += count;
+        }
+        else if (*fen == '/')
+        {
+            // Move to the next rank
+            --rank;
+            file = 1;
+        }
+        else
+        {
+            // Piece
+            board->data[index++] = *fen;
+            ++file;
+        }
 
-    PG_RETURN_BYTEA_P(result);
-}
-
-Datum chessboard_recv(PG_FUNCTION_ARGS) {
-    bytea *input = PG_GETARG_BYTEA_P(0);
-    ChessBoard *result;
-
-    if (VARSIZE(input) != VARHDRSZ + sizeof(ChessBoard)) {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid ChessBoard bytea")));
+        ++fen;
     }
 
-    result = (ChessBoard *) palloc(sizeof(ChessBoard));
-    memcpy(result, VARDATA(input), sizeof(ChessBoard));
-
-    PG_RETURN_POINTER(result);
+    return board;
 }
