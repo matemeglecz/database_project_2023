@@ -1,45 +1,28 @@
 #ifndef CHESSBOARD_H
 #define CHESSBOARD_H
 
-#include <stdbool.h>
+#include "postgres.h"
+#include "fmgr.h"
 
-/* Structure to represent a chess board in FEN notation */
 typedef struct
 {
-    char data[64];  // 8x8 chess board represented as a linear array
-} ChessBoard;
+    char board[64];        // 8x8 chess board represented as a linear array
+    char currentColor;     // Current turn: 'w' for WHITE, 'b' for BLACK
+    char castling[5];      // Castling availability, e.g., "KQkq"
+    char enPassant[2];      // Square of the possible en passant target (file, rank), e.g., {2, 5}
+    int halfMoveClock;     // Half-move clock for the 50-move rule
+    int fullMoveNumber;    // Full-move number
+} Chessboard;
 
-/* fmgr macros for chessboard type */
-#define DatumGetChessBoardP(X)  ((ChessBoard *) DatumGetPointer(X))
-#define ChessBoardPGetDatum(X)  PointerGetDatum(X)
-#define PG_GETARG_CHESSBOARD_P(n) DatumGetChessBoardP(PG_GETARG_DATUM(n))
-#define PG_RETURN_CHESSBOARD_P(x) return ChessBoardPGetDatum(x)
+#define DatumGetChessboardP(X)  ((Chessboard *) DatumGetPointer(X))
+#define ChessboardPGetDatum(X)  PointerGetDatum(X)
+#define PG_GETARG_CHESSBOARD_P(n) DatumGetChessboardP(PG_GETARG_DATUM(n))
+#define PG_RETURN_CHESSBOARD_P(x) return ChessboardPGetDatum(x)
 
-/*****************************************************************************/
-/* Function declarations for input/output and conversion */
+Datum chessboard_in(PG_FUNCTION_ARGS);
+Datum chessboard_out(PG_FUNCTION_ARGS);
+Datum chessboard_send(PG_FUNCTION_ARGS);
+Datum chessboard_recv(PG_FUNCTION_ARGS);
+Chessboard* make_chessboard(char* fen);
 
-/* Input function */
-extern Datum chessboard_in(PG_FUNCTION_ARGS);
-
-/* Output function */
-extern Datum chessboard_out(PG_FUNCTION_ARGS);
-
-/* Receive function */
-extern Datum chessboard_recv(PG_FUNCTION_ARGS);
-
-/* Send function */
-extern Datum chessboard_send(PG_FUNCTION_ARGS);
-
-/* Constructor function */
-extern Datum chessboard_constructor(PG_FUNCTION_ARGS);
-
-/* Accessor functions */
-extern Datum chessboard_get_piece(PG_FUNCTION_ARGS);
-extern Datum chessboard_set_piece(PG_FUNCTION_ARGS);
-extern Datum chessboard_clear_board(PG_FUNCTION_ARGS);
-
-/* Utility functions */
-extern char* get_fen_notation(ChessBoard* board);
-extern ChessBoard* set_board_from_fen(const char* fen);
-
-#endif /* CHESSBOARD_H */
+#endif
