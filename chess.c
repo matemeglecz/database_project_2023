@@ -42,10 +42,10 @@ PG_MODULE_MAGIC;
 static Chessgame *
 chessgame_make(char* game)
 {
-  Chessgame *c = palloc(sizeof(Chessgame));
+  Chessgame *c = (Chessgame*)palloc(sizeof(Chessgame));
 
   // copy the string to the game
-  c->game = palloc(sizeof(char) * strlen(game));
+  //c->game = (char*)palloc(sizeof(char) * strlen(game));
   strcpy(c->game, game);
   
 
@@ -65,7 +65,7 @@ static char*
 sanmove_to_str(const SANmove* s)
 {
     // allocate a 30 char array for the result
-    char* result = palloc(sizeof(char) * 30);
+    char* result = (char*)palloc(sizeof(char) * 30);
     result[0] = '\0';
     
     if(s->piece != '0' && s->piece != 'p')
@@ -129,15 +129,15 @@ sanmove_to_str(const SANmove* s)
 }
 
 static char *
-chessgame_to_str(const Chessgame_helper *c)
+chessgamehelper_to_str(const Chessgame_helper *c)
 {
     // create string from c moves
-    char* result = palloc(sizeof(char) * 256);
+    char* result = (char*)palloc(sizeof(char) * 256);
     result[0] = '\0';
     
     for (int i = 0; i < c->size; ++i)
     {
-        char* move = palloc(sizeof(char) * 10);
+        char* move = (char*)palloc(sizeof(char) * 10);
         sprintf(move,"%d. ", i+1);
         strcat(result, move);
         strcat(result, sanmove_to_str(&c->moves[i][0]));
@@ -151,6 +151,14 @@ chessgame_to_str(const Chessgame_helper *c)
 
     return result;
 }
+
+static char *
+chessgame_to_str(const Chessgame *c)
+{
+  char *result = psprintf("%s", c->game);
+  return result;
+}
+
 
 /*****************************************************************************/
 
@@ -172,7 +180,7 @@ sanmove_parse(char *in)
     c.from_file = '0';
     c.from_rank = 0;
   //copy the input string to a new string
-    char *str = palloc(sizeof(in));
+    char *str = (char*)palloc(sizeof(in));
     strcpy(str, in);
   //split the input into substrings devided by spaces
 
@@ -254,11 +262,11 @@ sanmove_parse(char *in)
   return c;
 }
 
-static Chessgame *
-chessgame_parse(char in[])
+static Chessgame_helper *
+chessgame_helper_parse(char in[])
 {
-    //remove line breaks and copy the input string to a new string
-  char *str = palloc(sizeof(char) * strlen(in));
+  //remove line breaks and copy the input string to a new string
+  char *str = (char*)palloc(sizeof(char) * strlen(in));
   int len = strlen(in);
   int j = 0;
   for (int i = 0; i < len; ++i)
@@ -322,27 +330,34 @@ chessgame_parse(char in[])
         moves++;
       }
       // store the sanmove in allmoves
-    allmoves[step][0] = sanmoves[0];
-    allmoves[step][1] = sanmoves[1];
+      allmoves[step][0] = sanmoves[0];
+      allmoves[step][1] = sanmoves[1];
       dot = dot2 + 1;
       dot2 = strchr(dot, '.');
-    step++;
+      step++;
     
     }
   }
   
+  Chessgame_helper *c_helper = (Chessgame_helper*)palloc(sizeof(Chessgame_helper));
+  c_helper->moves = allmoves;
+  c_helper->size = step;
+  return c_helper;
+}
 
+static Chessgame *
+chessgame_parse(char in[])
+{
 /*
   if (sscanf(str, " ( %lf , %lf )", &a, &b) != 2)
     ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
       errmsg("invalid input syntax for type %s: \"%s\"", "complex", str)));
       */
 
-  Chessgame_helper* c_helper = palloc(sizeof(Chessgame_helper));
-  c_helper->moves = allmoves;
-  c_helper->size = step;
+  Chessgame_helper* c_helper = chessgame_helper_parse(in);
+  
 
-  char* game_str = chessgame_to_str(c_helper);
+  char* game_str = chessgamehelper_to_str(c_helper);
 
   
 
@@ -365,7 +380,9 @@ Datum
 chessgame_out(PG_FUNCTION_ARGS)
 {
   Chessgame *c = PG_GETARG_CHESSGAME_P(0);
-  char* result = c->game;
+  //char* result = c->game;
+  char *result = palloc(sizeof(char) * strlen(c->game));
+  strcpy(result, c->game);
   PG_FREE_IF_COPY(c, 0);
   PG_RETURN_CSTRING(result);
 }
@@ -374,9 +391,10 @@ PG_FUNCTION_INFO_V1(chessgame_recv);
 Datum
 chessgame_recv(PG_FUNCTION_ARGS)
 {
-  StringInfo  buf = (StringInfo) PG_GETARG_POINTER(0);
+  StringInfo buf = (StringInfo) PG_GETARG_POINTER(0);
   Chessgame *c = (Chessgame *) palloc(sizeof(Chessgame));
-  c->game = pq_getmsgstring(buf);
+  char* game = pq_getmsgstring(buf);
+  strcpy(c->game, game);
   PG_RETURN_CHESSGAME_P(c);
 }
 
@@ -407,6 +425,7 @@ Datum
 chessgame_cast_to_text(PG_FUNCTION_ARGS)
 {
   Chessgame *c  = PG_GETARG_CHESSGAME_P(0);
+  
   text *out = (text *)DirectFunctionCall1(textin,
             PointerGetDatum(c->game));
   PG_FREE_IF_COPY(c, 0);
@@ -421,5 +440,45 @@ Datum
 chessgame_constructor(PG_FUNCTION_ARGS)
 {
   char* game = PG_GETARG_CSTRING(0);
-  PG_RETURN_CHESSGAME_P(chessgame_parse(game));
+  Chessgame *c = chessgame_parse(game);
+  PG_RETURN_CHESSGAME_P(c);
+}
+
+
+/*****************************************************************************/
+
+PG_FUNCTION_INFO_V1(getFirstMoves);
+Datum
+getFirstMoves(PG_FUNCTION_ARGS)
+{
+  Chessgame *c = PG_GETARG_CHESSGAME_P(0);
+  int n = PG_GETARG_INT32(1);
+
+
+  if (n <= 0)
+    ereport(ERROR,(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+      errmsg("invalid subscript value: %d", n)));
+    
+  // parse c->game into chessgame_helper
+  Chessgame_helper* c_helper = chessgame_helper_parse(c->game);
+
+  if (n > c_helper->size)
+      n = c_helper->size * 2;
+
+  float full_moves = ((float)n)/2;
+  int needed_rounds = ceil(full_moves);
+
+  // create a new chessgame_helper
+
+  c_helper->size = needed_rounds;
+  if(n % 2 == 1)
+      c_helper->moves[needed_rounds-1][1].piece = '0';
+
+  char* game_str = chessgamehelper_to_str(c_helper);
+
+  // create a new chessgame
+  Chessgame* result = chessgame_make(game_str);
+
+  PG_FREE_IF_COPY(c, 0);
+  PG_RETURN_CHESSGAME_P(result);
 }
