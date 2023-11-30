@@ -482,3 +482,33 @@ getFirstMoves(PG_FUNCTION_ARGS)
   PG_FREE_IF_COPY(c, 0);
   PG_RETURN_CHESSGAME_P(result);
 }
+
+PG_FUNCTION_INFO_V1(hasOpening);
+Datum 
+hasOpening(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    // parse c1->game into chessgame_helper
+    Chessgame_helper* c1_helper = chessgame_helper_parse(c1->game);
+    // parse c2->game into chessgame_helper
+    Chessgame_helper* c2_helper = chessgame_helper_parse(c2->game);
+    bool result = true;
+    // iterate through c2_helper->moves
+    for(int i=0; i<c2_helper->size;i++)
+    {
+        if(strcmp(sanmove_to_str(&c1_helper->moves[i][0]), sanmove_to_str(&c2_helper->moves[i][0])) != 0)
+            result = false;
+            break;
+        if(c2_helper->moves[i][1].piece == '0')
+            break;
+        if(strcmp(sanmove_to_str(&c1_helper->moves[i][1]), sanmove_to_str(&c2_helper->moves[i][1])) != 0)
+            result = false;
+            break;
+    }
+    
+
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_BOOL(result);
+}

@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION chessgame_send(chessgame)
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE TYPE chessgame (
-  internallength = 16,
+  internallength = 512,
   input          = chessgame_in,
   output         = chessgame_out,
   receive        = chessgame_recv,
@@ -59,3 +59,13 @@ CREATE FUNCTION chessgame(cstring)
 /*****************************************************************************
  * Accessing values
  *****************************************************************************/
+
+ CREATE FUNCTION getFirstMoves(chessgame, integer)
+  RETURNS chessgame
+  AS 'MODULE_PATHNAME', 'getFirstMoves'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION hasOpening(chessgame, chessgame)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'hasOpening'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
