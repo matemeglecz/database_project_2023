@@ -9,7 +9,7 @@ PG_MODULE_MAGIC;
 /*****************************************************************************/
 
 static Chessboard *
-make_chessboard(char *fen) {
+chessboard_make(char *fen) {
     // Vous devez implémenter la logique pour créer un plateau d'échecs à partir de la notation FEN
     // Utilisez la structure Chessboard et remplissez-la en fonction de la notation FEN.
     // ...
@@ -33,13 +33,13 @@ make_chessboard(char *fen) {
             // Empty squares
             int count = *fen - '0';
             for (int i = 0; i < count; i++) {
-                board.data[rank * 8 + file] = '0';
+                result->board[rank * 8 + file] = '0';
                 file++;
             }
             fen++;
         } else {
             // Piece
-            board.data[rank * 8 + file] = *fen;
+            result->board[rank * 8 + file] = *fen;
             file++;
             fen++;
         }
@@ -55,12 +55,12 @@ make_chessboard(char *fen) {
 
     // Current color
     fen++;
-    board.currentColor = *fen;
+    result->currentColor = *fen;
 
     // Move to the next part of FEN
     fen = strchr(fen, ' ');
 
-    / Move to the next part of FEN
+    // Move to the next part of FEN
     fen = strchr(fen, ' ');
     if (!fen) {
         // FEN is incomplete or malformed
@@ -70,16 +70,16 @@ make_chessboard(char *fen) {
 
     // Castling availability
     fen++;
-    strncpy(board.castling, fen, sizeof(board.castling));
+    strncpy(result->castling, fen, sizeof(result->castling));
 
     // En passant target square
     fen++;
     if (*fen != '-') {
-        board.enPassant[0] = *fen;
+        result->enPassant[0] = *fen;
         fen++;
-        board.enPassant[1] = *fen;
+        result->enPassant[1] = *fen;
     }else{
-        board.enPassant[0] = *fen;
+        result->enPassant[0] = *fen;
     }
 
     // Move to the next part of FEN
@@ -92,7 +92,7 @@ make_chessboard(char *fen) {
 
     // Half-move clock
     fen++;
-    board.halfMoveClock = atoi(fen);
+    result->halfMoveClock = atoi(fen);
 
     // Move to the next part of FEN
     fen = strchr(fen, ' ');
@@ -104,9 +104,9 @@ make_chessboard(char *fen) {
 
     // Full-move number
     fen++;
-    board.fullMoveNumber = atoi(fen);
+    result->fullMoveNumber = atoi(fen);
 
-    return board;
+    return result;
     
 }
 
@@ -175,8 +175,8 @@ static char* chessboard_to_str(const Chessboard* board){
 PG_FUNCTION_INFO_V1(chessboard_in);
 Datum chessboard_in(PG_FUNCTION_ARGS) {
     char *str = PG_GETARG_CSTRING(0);
-    Chessboard *result = make_chessboard(str);
-    PG_RETURN_POINTER(result);
+    Chessboard *result = chessboard_make(str);
+    PG_RETURN_CHESSBOARD_P(result);
 }
 
 PG_FUNCTION_INFO_V1(chessboard_out);
@@ -194,25 +194,17 @@ Datum chessboard_send(PG_FUNCTION_ARGS) {
 
     pq_begintypsend(&buf);
 
-    // Ajoutez ici le code pour envoyer chaque membre de la structure Chessboard
-    // Utilisez les fonctions pq_send* pour chaque membre
-
-    // Exemple pour envoyer le tableau board
     pq_sendbytes(&buf, chessboard->board, sizeof(chessboard->board));
 
-    // Exemple pour envoyer le caractère currentColor
     pq_sendbyte(&buf, chessboard->currentColor);
 
-    // Exemple pour envoyer la chaîne castling
     pq_sendstring(&buf, chessboard->castling);
 
-    // Exemple pour envoyer la chaîne enPassant
     pq_sendstring(&buf, chessboard->enPassant);
 
-    // Exemple pour envoyer les entiers halfMoveClock et fullMoveNumber
     pq_sendint(&buf, chessboard->halfMoveClock, sizeof(chessboard->halfMoveClock));
     pq_sendint(&buf, chessboard->fullMoveNumber, sizeof(chessboard->fullMoveNumber));
-
+    PG_FREE_IF_COPY(chessboard, 0);
     PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
 }
 
@@ -237,7 +229,7 @@ Datum chessboard_recv(PG_FUNCTION_ARGS) {
     result->halfMoveClock = pq_getmsgint(buf, sizeof(result->halfMoveClock));
     result->fullMoveNumber = pq_getmsgint(buf, sizeof(result->fullMoveNumber));
 
-    PG_RETURN_POINTER(result);
+    PG_RETURN_CHESSBOARD_P(result);
 }
 
 PG_FUNCTION_INFO_V1(chessboard_cast_from_text);
@@ -247,14 +239,14 @@ chessboard_cast_from_text(PG_FUNCTION_ARGS)
   text *txt = PG_GETARG_TEXT_P(0);
   char *str = DatumGetCString(DirectFunctionCall1(textout,
                PointerGetDatum(txt)));
-  PG_RETURN_COMPLEX_P(make_chessboard(str));
+  PG_RETURN_CHESSBOARD_P(chessboard_make(str));
 }
 
 PG_FUNCTION_INFO_V1(chessboard_cast_to_text);
 Datum
 chessboard_cast_to_text(PG_FUNCTION_ARGS)
 {
-  Chessboard *c  = PG_GETARG_COMPLEX_P(0);
+  Chessboard *c  = PG_GETARG_CHESSBOARD_P(0);
   text *out = (text *)DirectFunctionCall1(textin,
             PointerGetDatum(chessboard_to_str(c)));
   PG_FREE_IF_COPY(c, 0);
@@ -263,12 +255,10 @@ chessboard_cast_to_text(PG_FUNCTION_ARGS)
 
 /*****************************************************************************/
 
-PG_FUNCTION_INFO_V1(complex_constructor);
-Datum
-complex_constructor(PG_FUNCTION_ARGS)
-{
-  char* fen = PG_GETARG_CSTRING(0);
-  PG_RETURN_COMPLEX_P(complex_make(fen));
+PG_FUNCTION_INFO_V1(chessboard_constructor);
+Datum chessboard_constructor(PG_FUNCTION_ARGS) {
+    char* fen = PG_GETARG_CSTRING(0);
+    Chessboard *result = chessboard_make(fen);
+    PG_RETURN_CHESSBOARD_P(result);
 }
-
 /*****************************************************************************/

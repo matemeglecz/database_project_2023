@@ -23,6 +23,7 @@ Datum chessboard_in(PG_FUNCTION_ARGS);
 Datum chessboard_out(PG_FUNCTION_ARGS);
 Datum chessboard_send(PG_FUNCTION_ARGS);
 Datum chessboard_recv(PG_FUNCTION_ARGS);
-Chessboard* make_chessboard(char* fen);
+Datum chessboard_constructor(PG_FUNCTION_ARGS);
+static Chessboard* chessboard_make(char* fen);
 
 #endif
