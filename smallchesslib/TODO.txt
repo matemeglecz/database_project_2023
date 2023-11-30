@@ -1,0 +1,8 @@
+- create other static evaluation functions, e.g. one created by evolutionary
+  programming
+- try monte carlo search
+- add transposition table as a compile time option
+- add opening books as a compile time option
+- add 960 castling as a compile time option
+- function that estimates if a position can be achieved from start position,
+  also possibly a function that finds a specific proof game
