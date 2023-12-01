@@ -1,5 +1,5 @@
 /*
- * complex.h
+ * chess.h
  */
 
 /* Structure to represent complex numbers */
@@ -66,3 +66,4 @@ typedef struct
 #define FPge(A,B)       ((B) - (A) <= EPSILON)
 
 /*****************************************************************************/
+
