@@ -165,6 +165,30 @@ typedef struct
 // }
 
 // /* Function to initialize a chessboard with standard starting positions */
+void fill_board_from_fen(const char *fen, Chessboard* board) {
+    int index = 0;
+
+    // Parse the piece positions
+    while (*fen && *fen != ' ') {
+        if (*fen == '/') {
+            fen++;
+        } else if (*fen >= '1' && *fen <= '8') {
+            // Empty squares
+            int count = *fen - '0';
+            for (int i = 0; i < count; i++) {
+                board->board[index] = '0';
+                index++;
+            }
+            fen++;
+        } else {
+            // Piece
+            board->board[index] = *fen;
+            index++;
+            fen++;
+        }
+    }
+}
+
 void init_chessboard(Chessboard* board) {
      // Set the default positions
     char initialPosition[8][8] = {
@@ -176,7 +200,7 @@ void init_chessboard(Chessboard* board) {
          {'0', '0', '0', 'p', '0', '0', '0', '0'},
         {'0', '0', '0', '0', '0', '0', '0', '0'},
          {'p', 'p', 'p', '0', 'p', 'p', 'p', 'p'},
-         {'r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'}
+         {'r', 'n', 'b', 'k', 'q', 'b', 'n', 'r'}
      };
 
    // Copy the initial positions to the board
@@ -184,9 +208,9 @@ void init_chessboard(Chessboard* board) {
 
      // Set other default values
     board->currentColor = 'w';
-    strcpy(board->castling, "KQ");
-    board->enPassant[0] = 'f';
-    board->enPassant[1] = '6';
+    strcpy(board->castling, "-");
+    board->enPassant[0] = '-';
+    //board->enPassant[1] = '6';
     //board->enPassant[1] = -1;
     board->halfMoveClock = 0;
     board->fullMoveNumber = 1;
@@ -414,15 +438,15 @@ static char* chessboard_to_str(const Chessboard* board){
 
 int main() {
     // Créez une structure ChessBoard et initialisez-la avec les positions initiales.
-    Chessboard board;
-    init_chessboard(&board);
+    //Chessboard board;
+    //init_chessboard(&board);
 
     // Appelez la fonction chessboard_to_fen pour obtenir la notation FEN.
-    char fen[100];  // Assurez-vous que la taille est suffisante pour contenir la notation FEN.
-    strcpy(fen,chessboard_to_str(&board));
+    //char fen[100];  // Assurez-vous que la taille est suffisante pour contenir la notation FEN.
+    //strcpy(fen,chessboard_to_str(&board));
 
     // Affichez la notation FEN.
-    printf("FEN Notation: %s\n", fen);
+    //printf("FEN Notation: %s\n", fen);
     //print_chessboard(&board);
     // Test: Update board based on SAN move
     //update_board_from_san(&board, "e4");
@@ -439,5 +463,21 @@ int main() {
     // strcpy(fen3,chessboard_to_fen(&board));
     // // Affichez la notation FEN.
     // printf("FEN Notation: %s\n", fen3);
+    const char *fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    Chessboard chessboard;
+    
+    // Initialiser le tableau à des valeurs par défaut
+    memset(chessboard.board, '0', sizeof(chessboard.board));
+
+    fill_board_from_fen(fen, &chessboard);
+
+    // Afficher le tableau résultant
+    for (int i = 0; i < 64; i++) {
+        printf("%c ", chessboard.board[i]);
+        if ((i + 1) % 8 == 0) {
+            printf("\n");
+        }
+    }
+
     return 0;
 }

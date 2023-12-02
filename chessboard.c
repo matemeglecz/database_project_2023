@@ -1,46 +1,43 @@
-#include "chessboard.h"
+#include "postgres.h"
+#include "fmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "libpq/pqformat.h"
 #include <string.h>
-
+#include "chessboard.h"
 PG_MODULE_MAGIC;
+
 
 /*****************************************************************************/
 
 static Chessboard *
 chessboard_make(char *fen) {
-    // Vous devez implémenter la logique pour créer un plateau d'échecs à partir de la notation FEN
-    // Utilisez la structure Chessboard et remplissez-la en fonction de la notation FEN.
-    // ...
-    
-    // Exemple de création d'un plateau avec une pièce à la position (0, 0)
-    Chessboard *result = (Chessboard *)palloc0(sizeof(Chessboard));
-    int rank = 7;
-    int file = 0;
 
-    // position of pieces
-    while (*fen && rank >= 0) {
-        if (*fen == ' ') {
-            // Ignore spaces
-            fen++;
-        } else if (*fen == '/') {
-            // Move to the next rank
-            rank--;
-            file = 0;
+    Chessboard *result = palloc(sizeof(Chessboard));
+    // int rank = 7;
+    // int file = 0;
+    int index = 0;
+    if(result == NULL)
+    {
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("1 invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
+    }
+      // Parse the piece positions
+    while (*fen && *fen != ' ') {
+        if (*fen == '/') {
             fen++;
         } else if (*fen >= '1' && *fen <= '8') {
             // Empty squares
             int count = *fen - '0';
             for (int i = 0; i < count; i++) {
-                result->board[rank * 8 + file] = '0';
-                file++;
+                result->board[index] = '0';
+                index++;
             }
             fen++;
         } else {
             // Piece
-            result->board[rank * 8 + file] = *fen;
-            file++;
+            result->board[index] = *fen;
+            index++;
             fen++;
         }
     }
@@ -49,8 +46,8 @@ chessboard_make(char *fen) {
     fen = strchr(fen, ' ');
     if (!fen) {
         // FEN is incomplete or malformed
-        fprintf(stderr, "Invalid FEN string\n");
-        exit(EXIT_FAILURE);
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("2 invalid input syntax for type %s:  \"%s\"", "chessboard", fen)));
     }
 
     // Current color
@@ -60,18 +57,27 @@ chessboard_make(char *fen) {
     // Move to the next part of FEN
     fen = strchr(fen, ' ');
 
-    // Move to the next part of FEN
-    fen = strchr(fen, ' ');
     if (!fen) {
-        // FEN is incomplete or malformed
-        fprintf(stderr, "Invalid FEN string\n");
-        exit(EXIT_FAILURE);
+       ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("3 invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
     }
 
     // Castling availability
-    fen++;
-    strncpy(result->castling, fen, sizeof(result->castling));
 
+    fen++;
+    size_t castlingLength = strcspn(fen, " ");
+    if (castlingLength > sizeof(result->castling) ) {
+        castlingLength = sizeof(result->castling);
+    }
+    strncpy(result->castling, fen, castlingLength);
+
+    result->castling[castlingLength] = '\0';
+    // Move to the next part of FEN
+    fen = strchr(fen, ' ');
+    if (!fen) {
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("6 invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
+    }
     // En passant target square
     fen++;
     if (*fen != '-') {
@@ -85,21 +91,20 @@ chessboard_make(char *fen) {
     // Move to the next part of FEN
     fen = strchr(fen, ' ');
     if (!fen) {
-        // FEN is incomplete or malformed
-        fprintf(stderr, "Invalid FEN string\n");
-        exit(EXIT_FAILURE);
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("4 invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
     }
 
     // Half-move clock
     fen++;
+    
     result->halfMoveClock = atoi(fen);
 
     // Move to the next part of FEN
     fen = strchr(fen, ' ');
     if (!fen) {
-        // FEN is incomplete or malformed
-        fprintf(stderr, "Invalid FEN string\n");
-        exit(EXIT_FAILURE);
+       ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("5 invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
     }
 
     // Full-move number
@@ -112,7 +117,12 @@ chessboard_make(char *fen) {
 
 /*****************************************************************************/
 
-static Chessboard * chessboard_parse(char* fen){
+static Chessboard * chessboard_parse(char *fen){
+    if(!fen){
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+    errmsg("parse invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
+    }
+    
     return chessboard_make(fen);
 }
 
@@ -175,14 +185,16 @@ static char* chessboard_to_str(const Chessboard* board){
 PG_FUNCTION_INFO_V1(chessboard_in);
 Datum chessboard_in(PG_FUNCTION_ARGS) {
     char *str = PG_GETARG_CSTRING(0);
+    
     Chessboard *result = chessboard_make(str);
     PG_RETURN_CHESSBOARD_P(result);
 }
 
 PG_FUNCTION_INFO_V1(chessboard_out);
 Datum chessboard_out(PG_FUNCTION_ARGS) {
-    Chessboard *chessboard = (Chessboard *)PG_GETARG_CHESSBOARD_P(0);
-    char *result = complex_to_str(chessboard);
+    Chessboard *chessboard = PG_GETARG_CHESSBOARD_P(0);
+    char *result = palloc(sizeof(char) * strlen(chessboard_to_str(chessboard)));
+    strcpy(result, chessboard_to_str(chessboard));
     PG_FREE_IF_COPY(chessboard, 0);
     PG_RETURN_CSTRING(result);
 }
@@ -194,7 +206,7 @@ Datum chessboard_send(PG_FUNCTION_ARGS) {
 
     pq_begintypsend(&buf);
 
-    pq_sendbytes(&buf, chessboard->board, sizeof(chessboard->board));
+    pq_sendstring(&buf, chessboard->board);
 
     pq_sendbyte(&buf, chessboard->currentColor);
 
@@ -214,20 +226,16 @@ Datum chessboard_recv(PG_FUNCTION_ARGS) {
     Chessboard *result;
 
     result = (Chessboard *)palloc(sizeof(Chessboard));
+    result = chessboard_parse(pq_getmsgstring(buf));
+    // memcpy(result->board, pq_getmsgstring(buf, sizeof(result->board)), sizeof(result->board));
 
-    // Ajoutez ici le code pour recevoir chaque membre de la structure Chessboard
-    // Utilisez les fonctions pq_recv* pour chaque membre
+    // result->currentColor = pq_getmsgbyte(buf);
 
-    pq_copymsgbytes(buf, result->board, sizeof(result->board));
+    // strncpy(result->castling, pq_getmsgstring(buf), sizeof(result->castling));
+    // strncpy(result->enPassant, pq_getmsgstring(buf), sizeof(result->enPassant));
 
-    result->currentColor = pq_getmsgbyte(buf);
-
-    pq_copymsgstring(buf, result->castling, sizeof(result->castling));
-
-    pq_copymsgstring(buf, result->enPassant, sizeof(result->enPassant));
-
-    result->halfMoveClock = pq_getmsgint(buf, sizeof(result->halfMoveClock));
-    result->fullMoveNumber = pq_getmsgint(buf, sizeof(result->fullMoveNumber));
+    // result->halfMoveClock = pq_getmsgint(buf, sizeof(result->halfMoveClock));
+    // result->fullMoveNumber = pq_getmsgint(buf, sizeof(result->fullMoveNumber));
 
     PG_RETURN_CHESSBOARD_P(result);
 }
@@ -258,7 +266,12 @@ chessboard_cast_to_text(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(chessboard_constructor);
 Datum chessboard_constructor(PG_FUNCTION_ARGS) {
     char* fen = PG_GETARG_CSTRING(0);
-    Chessboard *result = chessboard_make(fen);
+    if(!fen){
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+    errmsg("constructor invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
+    }
+    
+    Chessboard *result = chessboard_parse(fen);
     PG_RETURN_CHESSBOARD_P(result);
 }
 /*****************************************************************************/

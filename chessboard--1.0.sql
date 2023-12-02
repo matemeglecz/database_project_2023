@@ -1,5 +1,5 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION chess" to load this file. \quit
+\echo Use "CREATE EXTENSION chessboard" to load this file. \quit
 
 /******************************************************************************
  * Input/Output
@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION chessboard_send(chessboard)
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE TYPE chessboard (
-  internallength = 512,
+  internallength = 80,
   input          = chessboard_in,
   output         = chessboard_out,
   receive        = chessboard_recv,

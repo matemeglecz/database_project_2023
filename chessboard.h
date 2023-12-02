@@ -1,8 +1,3 @@
-#ifndef CHESSBOARD_H
-#define CHESSBOARD_H
-
-#include "postgres.h"
-#include "fmgr.h"
 
 typedef struct
 {
@@ -19,11 +14,6 @@ typedef struct
 #define PG_GETARG_CHESSBOARD_P(n) DatumGetChessboardP(PG_GETARG_DATUM(n))
 #define PG_RETURN_CHESSBOARD_P(x) return ChessboardPGetDatum(x)
 
-Datum chessboard_in(PG_FUNCTION_ARGS);
-Datum chessboard_out(PG_FUNCTION_ARGS);
-Datum chessboard_send(PG_FUNCTION_ARGS);
-Datum chessboard_recv(PG_FUNCTION_ARGS);
-Datum chessboard_constructor(PG_FUNCTION_ARGS);
-static Chessboard* chessboard_make(char* fen);
 
-#endif
+
+
