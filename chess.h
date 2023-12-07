@@ -35,7 +35,7 @@ typedef struct
 
 typedef struct 
 {
-  char game[512];
+  char game[2500];
 } Chessgame;
 
 

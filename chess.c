@@ -48,6 +48,7 @@ chessgame_make(char* game)
   //c->game = (char*)palloc(sizeof(char) * strlen(game));
   strcpy(c->game, game);
   
+  pfree(game);
 
   if(c->game == NULL)
   {
@@ -132,19 +133,24 @@ static char *
 chessgamehelper_to_str(const Chessgame_helper *c)
 {
     // create string from c moves
-    char* result = (char*)palloc(sizeof(char) * 256);
+    char* result = (char*)palloc(sizeof(char) * 5000);
     result[0] = '\0';
     
     for (int i = 0; i < c->size; ++i)
     {
-        char* move = (char*)palloc(sizeof(char) * 10);
+        char* move = (char*)palloc(sizeof(char) * 30);
         sprintf(move,"%d. ", i+1);
         strcat(result, move);
-        strcat(result, sanmove_to_str(&c->moves[i][0]));
+        pfree(move);
+        char* white_move = sanmove_to_str(&c->moves[i][0]);
+        strcat(result, white_move);
+        pfree(white_move);
         strcat(result, " ");
         if(c->moves[i][1].piece != '0'){
-          strcat(result, sanmove_to_str(&c->moves[i][1]));
+          char* black_move = sanmove_to_str(&c->moves[i][1]);
+          strcat(result, black_move);
           strcat(result, " ");
+          pfree(black_move);
         }
 
     }
@@ -258,7 +264,7 @@ sanmove_parse(char *in)
       }
     }
 
-
+  pfree(str);
   return c;
 }
 
@@ -286,8 +292,8 @@ chessgame_helper_parse(char in[])
   // steps in game
   int step = 0;
   //create a 2 dim dynamic array for storing all the move pairs 2 by 100
-  SANmove **allmoves = (SANmove **)palloc(sizeof(SANmove*) * 100);
-  for (int i = 0; i < 100; ++i)
+  SANmove **allmoves = (SANmove **)palloc(sizeof(SANmove*) * 270);
+  for (int i = 0; i < 270; ++i)
   {
       allmoves[i] = (SANmove *)palloc(2 * sizeof(SANmove));
 
@@ -338,7 +344,7 @@ chessgame_helper_parse(char in[])
     
     }
   }
-  
+  pfree(str);
   Chessgame_helper *c_helper = (Chessgame_helper*)palloc(sizeof(Chessgame_helper));
   c_helper->moves = allmoves;
   c_helper->size = step;
@@ -359,7 +365,11 @@ chessgame_parse(char in[])
 
   char* game_str = chessgamehelper_to_str(c_helper);
 
-  
+  for (int i = 0; i < 270; ++i)
+  { 
+      pfree(c_helper->moves[i]);
+  }
+  pfree(c_helper);
 
   return chessgame_make(game_str);
 }
@@ -498,16 +508,48 @@ hasOpeningInternal(Chessgame* c1, Chessgame* c2)
   // iterate through c2_helper->moves
   for(int i=0; i<c2_helper->size;i++)
   {
-      if(strcmp(sanmove_to_str(&c1_helper->moves[i][0]), sanmove_to_str(&c2_helper->moves[i][0])) != 0)
+      char* c1_move_0_str = sanmove_to_str(&c1_helper->moves[i][0]);
+      char* c2_move_0_str = sanmove_to_str(&c2_helper->moves[i][0]);
+
+      if(strcmp(c1_move_0_str, c2_move_0_str) != 0){
           result = false;
-          break;
+      }
+      pfree(c1_move_0_str);
+      pfree(c2_move_0_str);
+      if (result == false)
+        break;
+
+
       if(c2_helper->moves[i][1].piece == '0')
           break;
-      if(strcmp(sanmove_to_str(&c1_helper->moves[i][1]), sanmove_to_str(&c2_helper->moves[i][1])) != 0)
+
+      char* c1_move_1_str = sanmove_to_str(&c1_helper->moves[i][1]);
+      char* c2_move_1_str = sanmove_to_str(&c2_helper->moves[i][1]);
+      if(strcmp(c1_move_1_str, c2_move_1_str) != 0){
           result = false;
-          break;
+      }
+
+      pfree(c1_move_1_str);
+      pfree(c2_move_1_str);
+
+      if (result == false)
+        break;
   }
 
+  // free moves in c1_helper
+  for (int i = 0; i < 270; ++i)
+  { 
+      pfree(c1_helper->moves[i]);
+  }
+  pfree(c1_helper);
+
+  // free moves in c2_helper
+  for (int i = 0; i < 270; ++i)
+  { 
+      pfree(c2_helper->moves[i]);
+  }
+  pfree(c2_helper);
+  
   return result;
 }
 

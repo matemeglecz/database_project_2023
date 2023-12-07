@@ -1,0 +1,5 @@
+# chessgame extension
+comment = 'Chessgame B-Tree - comparison functions and btree index for chessgame type'
+default_version = '1.0'
+module_pathname = '$libdir/chess'
+relocatable = true
