@@ -191,7 +191,7 @@ sanmove_parse(char *in)
   //split the input into substrings devided by spaces
 
     //if the substring is a number, it is the move number
-    if (atoi(in) != 0)
+    if (atoi(in) != 0 || in[0] == '\0')
     {
       return c;
     }
@@ -501,6 +501,7 @@ hasOpeningInternal(Chessgame* c1, Chessgame* c2)
   Chessgame_helper* c1_helper = chessgame_helper_parse(c1->game);
   // parse c2->game into chessgame_helper
   Chessgame_helper* c2_helper = chessgame_helper_parse(c2->game);
+
   bool result = true;
 
   if (c2_helper->size > c1_helper->size)
@@ -511,17 +512,20 @@ hasOpeningInternal(Chessgame* c1, Chessgame* c2)
       char* c1_move_0_str = sanmove_to_str(&c1_helper->moves[i][0]);
       char* c2_move_0_str = sanmove_to_str(&c2_helper->moves[i][0]);
 
+       
+
       if(strcmp(c1_move_0_str, c2_move_0_str) != 0){
           result = false;
       }
       pfree(c1_move_0_str);
       pfree(c2_move_0_str);
-      if (result == false)
+      if (!result){
         break;
-
-
-      if(c2_helper->moves[i][1].piece == '0')
+      }
+      
+      if(c2_helper->moves[i][1].piece == '0'){
           break;
+      }
 
       char* c1_move_1_str = sanmove_to_str(&c1_helper->moves[i][1]);
       char* c2_move_1_str = sanmove_to_str(&c2_helper->moves[i][1]);
@@ -529,12 +533,15 @@ hasOpeningInternal(Chessgame* c1, Chessgame* c2)
           result = false;
       }
 
+
       pfree(c1_move_1_str);
       pfree(c2_move_1_str);
 
-      if (result == false)
+      if (!result){
         break;
+      }
   }
+  
 
   // free moves in c1_helper
   for (int i = 0; i < 270; ++i)
@@ -575,6 +582,7 @@ chessgame_cmp_internal(Chessgame *c1, Chessgame *c2)
 {
     bool c1_in_c2 = hasOpeningInternal(c2->game, c1->game);
     bool c2_in_c1 = hasOpeningInternal(c1->game, c2->game);
+    
     if (c1_in_c2 && c2_in_c1) {
         return 0;
     } else if (c1_in_c2) {
