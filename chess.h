@@ -52,8 +52,6 @@ typedef struct
 #define ChessgamePGetDatum(X)  PointerGetDatum(X)
 #define PG_GETARG_CHESSGAME_P(n) DatumGetChessgameP(PG_GETARG_DATUM(n))
 #define PG_RETURN_CHESSGAME_P(x) return ChessgamePGetDatum(x)
-static char *
-chessgame_to_str(const Chessgame *c);
 
 /*****************************************************************************/
 
