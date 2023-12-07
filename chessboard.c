@@ -5,6 +5,9 @@
 #include "libpq/pqformat.h"
 #include <string.h>
 #include "chess.h"
+#include "smallchesslib/smallchesslib.h"
+
+
 //PG_MODULE_MAGIC;
 
 
@@ -275,3 +278,62 @@ Datum chessboard_constructor(PG_FUNCTION_ARGS) {
     PG_RETURN_CHESSBOARD_P(result);
 }
 /*****************************************************************************/
+
+PG_FUNCTION_INFO_V1(getBoard);
+Datum getBoard(PG_FUNCTION_ARGS) {
+    // Check and extract function arguments
+    if (PG_ARGISNULL(0) || PG_ARGISNULL(1)) {
+        ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
+    }
+
+    // Get the chess game and half-move count parameters
+    Chessgame *chessgame = PG_GETARG_CHESSGAME_P(0);
+    int32 half_moves = PG_GETARG_INT32(1);
+
+    // Convert text input to C string
+    char *chessgame_str = chessgame_to_str(chessgame);
+
+    // Use smallchesslib functions to process the chess game
+    // Example: fetch the board state at the specified half-move
+    char fen[128]; // Buffer to store the FEN representation of the board state
+    // Example usage of smallchesslib, replace with appropriate functions from the library
+    int result = smallchesslib_get_board_state(chessgame_str, half_moves, fen);
+
+    // Check for errors or invalid moves
+    if (result != 0) {
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
+    }
+
+    // Convert the FEN string to a PostgreSQL text type
+    text *fen_text = cstring_to_text(fen);
+
+    // Return the FEN representation of the board state
+    PG_RETURN_TEXT_P(fen_text);
+}
+
+PG_FUNCTION_INFO_V1(hasBoard);
+Datum hasBoard(PG_FUNCTION_ARGS) {
+    if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2)) {
+        ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
+    }
+
+    Chessgame *chessgame = PG_GETARG_CHESSGAME_P(0);
+    Chessboard *chessboard = PG_GETARG_CHESSBOARD_P(1);
+    int32 half_moves = PG_GETARG_INT32(2);
+
+    // Convert text input to C string
+    char *chessgame_text = chessgame_to_str(chessgame);
+     char *chessboard_text = chessboard_to_str(chessboard);
+
+    if (half_moves < 0) {
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
+    }
+
+    char *chessgame_str = text_to_cstring(chessgame_text);
+    char *chessboard_str = text_to_cstring(chessboard_text);
+
+    // Check if the chess game contains the given board state in its initial N half-moves
+    bool contains_board_state = smallchesslib_contains_board_state(chessgame_str, chessboard_str, half_moves);
+
+    PG_RETURN_BOOL(contains_board_state);
+}
