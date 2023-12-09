@@ -10,4 +10,10 @@ INSERT INTO t values (5, '1. e4 e5'),(6, '1. e4 d5 2. exd5 Qxd 3. Nc3 Qd8 4. Bc4
 
 select * from t;
 
-select g as g, getFirstMoves(g, 3) as first_moves, hasOpening(g, '1. d5') as openingwrong, hasOpening(g, '1. e4') as openingright from t;
+select g as g, getFirstMoves(g, 3) as first_moves, hasOpening(g, '1. d5') as openingwrong, hasOpening(g, '1. e4') as openingright, hasOpening(g, '1. e4 d5 2. exd5 Qxd') as long_true, hasOpening(g, '1. e4 d6 2. exd5 Qxd') as long_false from t;
+
+create index openeing_idx on t(g);
+
+EXPLAIN ANALYZE SELECT count(*)
+FROM t
+WHERE hasopening(t, '1. e4'); 
