@@ -125,3 +125,12 @@ CREATE FUNCTION chessboard(cstring)
   RETURNS chessboard
   AS 'MODULE_PATHNAME', 'chessboard_constructor'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+  /*****************************************************************************
+ * Accessing values
+ *****************************************************************************/
+
+ CREATE FUNCTION getBoard(chessgame, integer)
+  RETURNS chessboard
+  AS 'MODULE_PATHNAME', 'getBoard'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;

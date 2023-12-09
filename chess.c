@@ -16,7 +16,6 @@
 
 #include "utils/builtins.h"
 #include "libpq/pqformat.h"
-#include "smallchesslib.h"
 #include "chess.h"
 
 
@@ -520,33 +519,45 @@ static Chessboard *
 chessboard_make(char *fen) {
 
     Chessboard *result = palloc(sizeof(Chessboard));
-    // int rank = 7;
-    // int file = 0;
-    int index = 0;
-    if(result == NULL)
+    char board2D[8][8];
+    int rank = 7;
+    int file = 0;
+    int index = 63;
+    /*if(result == NULL)
     {
         ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
         errmsg("1 invalid input syntax for type %s: \"%s\"", "chessboard", fen)));
-    }
+    }*/
       // Parse the piece positions
     while (*fen && *fen != ' ') {
         if (*fen == '/') {
             fen++;
+            rank --;
+            file =0;
         } else if (*fen >= '1' && *fen <= '8') {
             // Empty squares
             int count = *fen - '0';
             for (int i = 0; i < count; i++) {
-                result->board[index] = '0';
+                board2D[rank][file] = '0';
                 index++;
+                file++;
             }
             fen++;
         } else {
             // Piece
-            result->board[index] = *fen;
+            board2D[rank][file] = *fen;
             index++;
             fen++;
+            file++;
         }
     }
+
+    for (int row = 0; row < 8; ++row) {
+    for (int col = 0; col < 8; ++col) {
+      int index = index2DTo1D(row, col);
+      result->board[index] = board2D[row][col];
+    }
+  }
 
     // Move to the next part of FEN
     fen = strchr(fen, ' ');
@@ -685,6 +696,763 @@ static char* chessboard_to_str(const Chessboard* board){
 }
 
 
+void index1DTo2D(int index, int *row, int *col) {
+    *row = index / 8;
+    *col = index % 8;
+}
+
+// Convertit un indice 2D en indice 1D
+int index2DTo1D(int row, int col) {
+    return row * 8 + col;
+}
+
+static bool chessboard_update(Chessboard* board, const SANmove* s, char constPlayer){
+  // Convertit le tableau 1D en tableau 2D
+    char board2D[8][8];
+    for (int i = 0; i < 64; ++i) {
+        int row, col;
+        index1DTo2D(i, &row, &col);
+        board2D[row][col] = board->board[i];
+    }
+    int file = s->file - 'a';
+    bool move = false;
+    
+    for (int i = 0; i < 8; i++) {
+      for (int j = 0; j < 8; j++) {
+          elog(DEBUG1, "%c ", board2D[i][j]);
+      }
+      elog(DEBUG1, "\r\n");
+    }
+    
+    char piece_to_find = s->piece;
+    if(constPlayer == 'w' && s->piece == 'p'){
+      piece_to_find = toupper(s->piece);
+    }
+
+    if(constPlayer == 'b'){
+      piece_to_find = tolower(s->piece);
+    }
+    /*if(true){
+      ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+      errmsg("invalid move %c: file : %i rank: %i",  board2D[0][0], file, s->rank)));
+    }*/
+    
+    for(int i = 0; i <8; i++){
+      for(int j =0; j<8;j++){
+        if(board2D[i][j] == piece_to_find){
+          int possibleMove[64][2];
+          int counterPossibleMove = 0;
+          if(piece_to_find == 'p'){
+            if(i-1>=0){
+              if(board2D[i-1][j] != '0'){
+                //rank
+                possibleMove[counterPossibleMove][0] = i-1;
+                //file
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+              }
+              
+            }
+            
+            if(s->capture){
+              //rank
+              possibleMove[counterPossibleMove][0] = i-1;
+              //file
+              possibleMove[counterPossibleMove][1] = j-1;
+              counterPossibleMove++;
+              //rank
+              possibleMove[counterPossibleMove][0] = i-1;
+              //file
+              possibleMove[counterPossibleMove][1] = j+1;
+              counterPossibleMove++;
+            }
+            
+            
+            if(i == 6){
+              //rank
+              possibleMove[counterPossibleMove][0] = i-2;
+              //file
+              possibleMove[counterPossibleMove][1] = j;
+              counterPossibleMove++;
+            }
+            
+            for(int itera = 0; itera < counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+                if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+                    move = true;
+                  }
+                }else{
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  move = true;
+                }
+                
+              }
+            }
+
+
+          }
+
+          if(piece_to_find == 'P'){
+            if(i+1<8){
+               if(board2D[i+1][j] != '0'){
+                //rank
+                possibleMove[counterPossibleMove][0] = i+1;
+                //file
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+              }
+            }
+            
+            if(s->capture){
+              //rank
+              possibleMove[counterPossibleMove][0] = i+1;
+              //file
+              possibleMove[counterPossibleMove][1] = j-1;
+              counterPossibleMove++;
+              //rank
+              possibleMove[counterPossibleMove][0] = i+1;
+              //file
+              possibleMove[counterPossibleMove][1] = j+1;
+              counterPossibleMove++;
+            }
+            
+            
+            if(i == 1){
+              //rank
+              possibleMove[counterPossibleMove][0] = i+2;
+              //file
+              possibleMove[counterPossibleMove][1] = j;
+              counterPossibleMove++;
+            }
+
+            for(int itera = 0; itera< counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+                if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+                    move = true;
+                  }
+                }else{
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  move = true;
+                }
+              }
+            }
+
+          }
+
+          if(piece_to_find == 'r' || piece_to_find == 'R'){
+            for(int delta = 0; delta < 8; delta++){
+              
+              if(j+delta < 8){
+                if(constPlayer == 'b' && (board2D[i][j+delta] == 'r' || board2D[i][j+delta] == 'b' || board2D[i][j+delta] == 'n' || board2D[i][j+delta] == 'q' || board2D[i][j+delta] == 'k' || board2D[i][j+delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i][j+delta] == 'R' || board2D[i][j+delta] == 'B' || board2D[i][j+delta] == 'N' || board2D[i][j+delta] == 'Q' || board2D[i][j+delta] == 'K' || board2D[i][j+delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i;
+                //file
+                possibleMove[counterPossibleMove][1] = j + delta;
+                counterPossibleMove++;
+              }
+              if(j - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i][j-delta] == 'r' || board2D[i][j-delta] == 'b' || board2D[i][j-delta] == 'n' || board2D[i][j-delta] == 'q' || board2D[i][j-delta] == 'k' || board2D[i][j-delta] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i][j-delta] == 'R' || board2D[i][j-delta] == 'B' || board2D[i][j-delta] == 'N' || board2D[i][j-delta] == 'Q' || board2D[i][j-delta] == 'K' || board2D[i][j-delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i;
+                possibleMove[counterPossibleMove][1] = j - delta;
+                counterPossibleMove++;
+              }
+
+              if(i+delta < 8){
+                if(constPlayer == 'b' && (board2D[i+delta][j] == 'r' || board2D[i+delta][j] == 'b' || board2D[i+delta][j] == 'n' || board2D[i+delta][j] == 'q' || board2D[i+delta][j] == 'k' || board2D[i+delta][j] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i+delta][j] == 'R' || board2D[i+delta][j] == 'B' || board2D[i+delta][j] == 'N' || board2D[i+delta][j] == 'Q' || board2D[i+delta][j] == 'K' || board2D[i+delta][j] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i+delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+              }
+              if(i - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i - delta][j] == 'r' || board2D[i - delta][j] == 'b' || board2D[i - delta][j] == 'n' || board2D[i - delta][j] == 'q' || board2D[i - delta][j] == 'k' || board2D[i - delta][j] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i - delta][j] == 'R' || board2D[i - delta][j] == 'B' || board2D[i - delta][j] == 'N' || board2D[i - delta][j]== 'Q' || board2D[i - delta][j] == 'K' || board2D[i - delta][j] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - delta;
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+              }
+              
+            }
+
+            for(int itera = 0; itera< counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+                if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+                    move = true;
+                  }
+                }else{
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  move = true;
+                }
+              }
+            }
+          }
+
+          if(piece_to_find == 'n' || piece_to_find == 'N'){
+            if(i + 2 < 8){
+              if(j - 1 >= 0){
+                //rank
+                possibleMove[counterPossibleMove][0] = i+2;
+                //file
+                possibleMove[counterPossibleMove][1] = j - 1;
+                counterPossibleMove++;
+              }
+              if(j + 1 < 8){
+                //rank
+                possibleMove[counterPossibleMove][0] = i+2;
+                //file
+                possibleMove[counterPossibleMove][1] = j + 1;
+                counterPossibleMove++;
+              }
+              
+            }
+
+            if(i - 2 >= 0){
+              if(j - 1 >= 0){
+                //rank
+                possibleMove[counterPossibleMove][0] = i - 2;
+                //file
+                possibleMove[counterPossibleMove][1] = j - 1;
+                counterPossibleMove++;
+              }
+              if(j + 1 < 8){
+                //rank
+                possibleMove[counterPossibleMove][0] = i - 2;
+                //file
+                possibleMove[counterPossibleMove][1] = j + 1;
+                counterPossibleMove++;
+              }
+              
+            }
+
+             if(j - 2 >= 0){
+              if(i - 1 >= 0){
+                //rank
+                possibleMove[counterPossibleMove][0] = i - 1;
+                //file
+                possibleMove[counterPossibleMove][1] = j - 2;
+                counterPossibleMove++;
+              }
+              if(i + 1 < 8){
+                //rank
+                possibleMove[counterPossibleMove][0] = i + 1;
+                //file
+                possibleMove[counterPossibleMove][1] = j - 2;
+                counterPossibleMove++;
+              }
+              
+            }
+
+             if(j + 2 < 8){
+              if(i - 1 >= 0){
+                //rank
+                possibleMove[counterPossibleMove][0] = i - 1;
+                //file
+                possibleMove[counterPossibleMove][1] = j + 2;
+                counterPossibleMove++;
+              }
+              if(i + 1 < 8){
+                //rank
+                possibleMove[counterPossibleMove][0] = i + 1;
+                //file
+                possibleMove[counterPossibleMove][1] = j + 2;
+                counterPossibleMove++;
+              }
+              
+            }
+
+            for(int itera = 0; itera< counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+                if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+
+                    move = true;
+                  }
+                }else{
+                  
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  // if(piece_to_find == 'N'){
+                  //   /*char* result = (char*)malloc(sizeof(char) * 65);  
+                  //   int index = 0;
+
+                  //   for (int i = 0; i < 8; i++) {
+                  //       for (int j = 0; j < 8; j++) {
+                  //           result[index++] = board2D[i][j];
+                  //       }
+                  //   }
+                  //   char * sanStr = (char*)malloc(sizeof(char) * 4);
+                  //   sanStr = sanmove_to_str(&s);
+                  //   result[index] = '\0'; 
+                  //   if(index != 0){
+                  //     ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+                  //     errmsg("test board at move : %s , array : %s",  sanStr, result)));
+                  //   } */
+                  //   /*ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+                  //   errmsg("invalid move board2d %c  board1d %c: file : %i rank: %i, row %i , col %i",  board2D[0][6], board->board[6], file, s->rank, i, j)));
+                  //  */
+                  // }
+
+                  move = true;
+                }
+              }
+            }
+
+          }
+
+          if(piece_to_find == 'b' || piece_to_find == 'B'){
+            for(int delta = 0 ; delta < 8; delta ++){
+              if(i - delta >= 0 && j - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i - delta][j - delta] == 'r' || board2D[i - delta][j - delta] == 'b' || board2D[i - delta][j - delta] == 'n' || board2D[i - delta][j - delta] == 'q' || board2D[i - delta][j - delta] == 'k' || board2D[i - delta][j - delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i - delta][j - delta] == 'R' || board2D[i - delta][j - delta] == 'B' || board2D[i - delta][j - delta] == 'N' || board2D[i - delta][j - delta] == 'Q' || board2D[i - delta][j - delta] == 'K' || board2D[i - delta][j - delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j - delta;
+                counterPossibleMove++;
+              }
+
+              if(i - delta >= 0 && j + delta < 8){
+                 if(constPlayer == 'b' && (board2D[i - delta][j + delta] == 'r' || board2D[i - delta][j + delta] == 'b' || board2D[i - delta][j + delta] == 'n' || board2D[i - delta][j + delta] == 'q' || board2D[i - delta][j + delta] == 'k' || board2D[i - delta][j + delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i - delta][j + delta] == 'R' || board2D[i - delta][j + delta] == 'B' || board2D[i - delta][j + delta] == 'N' || board2D[i - delta][j + delta] == 'Q' || board2D[i - delta][j + delta] == 'K' || board2D[i - delta][j + delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j + delta;
+                counterPossibleMove++;
+              }
+
+              if(i + delta < 8 && j - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i + delta][j - delta] == 'r' || board2D[i + delta][j - delta] == 'b' || board2D[i + delta][j - delta] == 'n' || board2D[i + delta][j - delta] == 'q' || board2D[i + delta][j - delta] == 'k' || board2D[i + delta][j - delta] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i + delta][j - delta] == 'R' || board2D[i + delta][j - delta] == 'B' || board2D[i + delta][j - delta] == 'N' || board2D[i + delta][j - delta] == 'Q' || board2D[i + delta][j - delta] == 'K' || board2D[i + delta][j - delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i + delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j - delta;
+                counterPossibleMove++;
+              }
+
+              if(i + delta < 8 && j + delta < 8){
+                if(constPlayer == 'b' && (board2D[i + delta][j + delta] == 'r' || board2D[i + delta][j + delta] == 'b' || board2D[i + delta][j + delta] == 'n' || board2D[i + delta][j + delta] == 'q' || board2D[i + delta][j + delta] == 'k' || board2D[i + delta][j + delta] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i + delta][j + delta] == 'R' || board2D[i + delta][j + delta] == 'B' || board2D[i + delta][j + delta] == 'N' || board2D[i + delta][j + delta] == 'Q' || board2D[i + delta][j + delta] == 'K' || board2D[i + delta][j + delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i + delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j + delta;
+                counterPossibleMove++;
+              }
+            }
+
+            for(int itera = 0; itera< counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+                if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+                    move = true;
+                  }
+                }else{
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  move = true;
+                }
+              }
+            }
+          }
+
+          if(piece_to_find == 'q' ||piece_to_find == 'Q'){
+            for(int delta = 0; delta < 8; delta++){
+              
+             if(j+delta < 8){
+                if(constPlayer == 'b' && (board2D[i][j+delta] == 'r' || board2D[i][j+delta] == 'b' || board2D[i][j+delta] == 'n' || board2D[i][j+delta] == 'q' || board2D[i][j+delta] == 'k' || board2D[i][j+delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i][j+delta]== 'R' || board2D[i][j+delta] == 'B' || board2D[i][j+delta]== 'N' || board2D[i][j+delta] == 'Q' || board2D[i][j+delta] == 'K' || board2D[i][j+delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i;
+                //file
+                possibleMove[counterPossibleMove][1] = j + delta;
+                counterPossibleMove++;
+              }
+              if(j - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i][j-delta] == 'r' || board2D[i][j-delta] == 'b' || board2D[i][j-delta] == 'n' || board2D[i][j-delta] == 'q' || board2D[i][j-delta] == 'k' || board2D[i][j-delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i][j-delta] == 'R' || board2D[i][j-delta] == 'B' || board2D[i][j-delta] == 'N' || board2D[i][j-delta] == 'Q' || board2D[i][j-delta]== 'K' || board2D[i][j-delta] == 'P')){
+                  continue;
+                }
+
+                //rank
+                possibleMove[counterPossibleMove][0] = i;
+                possibleMove[counterPossibleMove][1] = j - delta;
+                counterPossibleMove++;
+              }
+
+              if(i+delta < 8){
+                if(constPlayer == 'b' && (board2D[i+delta][j] == 'r' || board2D[i+delta][j] == 'b' || board2D[i+delta][j] == 'n' || board2D[i+delta][j] == 'q' || board2D[i+delta][j] == 'k' || board2D[i+delta][j] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i+delta][j] == 'R' || board2D[i+delta][j] == 'B' || board2D[i+delta][j] == 'N' || board2D[i+delta][j] == 'Q' || board2D[i+delta][j] == 'K' || board2D[i+delta][j] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i+delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+              }
+              if(i - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i - delta][j] == 'r' || board2D[i - delta][j] == 'b' || board2D[i - delta][j] == 'n' || board2D[i - delta][j] == 'q' || board2D[i - delta][j] == 'k' || board2D[i - delta][j] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i - delta][j] == 'R' || board2D[i - delta][j] == 'B' || board2D[i - delta][j] == 'N' || board2D[i - delta][j] == 'Q' || board2D[i - delta][j] == 'K' || board2D[i - delta][j] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - delta;
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+              }
+              
+            }
+            for(int delta = 0 ; delta < 8; delta ++){
+              if(i - delta >= 0 && j - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i - delta][j - delta] == 'r' || board2D[i - delta][j - delta] == 'b' || board2D[i - delta][j - delta] == 'n' || board2D[i - delta][j - delta] == 'q' || board2D[i - delta][j - delta] == 'k' || board2D[i - delta][j - delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i - delta][j - delta] == 'R' || board2D[i - delta][j - delta] == 'B' || board2D[i - delta][j - delta] == 'N' || board2D[i - delta][j - delta] == 'Q' || board2D[i - delta][j - delta] == 'K' || board2D[i - delta][j - delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j - delta;
+                counterPossibleMove++;
+              }
+
+              if(i - delta >= 0 && j + delta < 8){
+                 if(constPlayer == 'b' && (board2D[i - delta][j + delta] == 'r' || board2D[i - delta][j + delta] == 'b' || board2D[i - delta][j + delta] == 'n' || board2D[i - delta][j + delta] == 'q' || board2D[i - delta][j + delta] == 'k' || board2D[i - delta][j + delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i - delta][j + delta] == 'R' || board2D[i - delta][j + delta] == 'B' || board2D[i - delta][j + delta] == 'N' || board2D[i - delta][j + delta] == 'Q' || board2D[i - delta][j + delta] == 'K' || board2D[i - delta][j + delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j + delta;
+                counterPossibleMove++;
+              }
+
+              if(i + delta < 8 && j - delta >= 0){
+                if(constPlayer == 'b' && (board2D[i + delta][j - delta] == 'r' || board2D[i + delta][j - delta] == 'b' || board2D[i + delta][j - delta] == 'n' || board2D[i + delta][j - delta] == 'q' || board2D[i + delta][j - delta] == 'k' || board2D[i + delta][j - delta] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i + delta][j - delta] == 'R' || board2D[i + delta][j - delta] == 'B' || board2D[i + delta][j - delta] == 'N' || board2D[i + delta][j - delta] == 'Q' || board2D[i + delta][j - delta] == 'K' || board2D[i + delta][j - delta]== 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i + delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j - delta;
+                counterPossibleMove++;
+              }
+
+              if(i + delta < 8 && j + delta < 8){
+                if(constPlayer == 'b' && (board2D[i + delta][j + delta] == 'r' || board2D[i + delta][j + delta] == 'b' || board2D[i + delta][j + delta] == 'n' || board2D[i + delta][j + delta] == 'q' || board2D[i + delta][j + delta] == 'k' || board2D[i + delta][j + delta] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i + delta][j + delta] == 'R' || board2D[i + delta][j + delta] == 'B' || board2D[i + delta][j + delta] == 'N' || board2D[i + delta][j + delta]== 'Q' || board2D[i + delta][j + delta] == 'K' || board2D[i + delta][j + delta] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i + delta;
+                //file
+                possibleMove[counterPossibleMove][1] = j + delta;
+                counterPossibleMove++;
+              }
+            }
+
+            for(int itera = 0; itera< counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+               if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+                    move = true;
+                  }
+                }else{
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  move = true;
+                }
+              }
+            }
+          }
+
+          if(piece_to_find == 'k' || piece_to_find == 'K'){
+            if(i + 1 < 8){
+                if(constPlayer == 'b' && (board2D[i + 1][j] == 'r' || board2D[i + 1][j] == 'b' || board2D[i + 1][j] == 'n' || board2D[i + 1][j] == 'q' || board2D[i + 1][j] == 'k' || board2D[i + 1][j] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i + 1][j] == 'R' || board2D[i + 1][j] == 'B' || board2D[i + 1][j] == 'N' || board2D[i + 1][j] == 'Q' || board2D[i + 1][j] == 'K' || board2D[i + 1][j] == 'P')){
+                  continue;
+                }
+                //rank
+                possibleMove[counterPossibleMove][0] = i + 1;
+                //file
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+                if(j + 1 < 8){
+                  if(constPlayer == 'b' && (board2D[i + 1][j+1] == 'r' || board2D[i + 1][j+1] == 'b' || board2D[i + 1][j+1] == 'n' || board2D[i + 1][j+1] == 'q' || board2D[i + 1][j+1] == 'k' || board2D[i + 1][j+1] == 'p')){
+                    continue;
+                  }
+
+                  if(constPlayer == 'w' && (board2D[i + 1][j+1] == 'R' ||board2D[i + 1][j+1] == 'B' || board2D[i + 1][j+1]== 'N' || board2D[i + 1][j+1] == 'Q' || board2D[i + 1][j+1] == 'K' || board2D[i + 1][j+1]== 'P')){
+                    continue;
+                  }
+                   //rank
+                  possibleMove[counterPossibleMove][0] = i + 1;
+                  //file
+                  possibleMove[counterPossibleMove][1] = j + 1;
+                  counterPossibleMove++;
+                }
+                if(j - 1 >= 0){
+                  if(constPlayer == 'b' && (board2D[i + 1][j-1] == 'r' || board2D[i + 1][j-1] == 'b' || board2D[i + 1][j-1] == 'n' || board2D[i + 1][j-1] == 'q' || board2D[i + 1][j-1] == 'k' || board2D[i + 1][j-1] == 'p')){
+                    continue;
+                  }
+
+                  if(constPlayer == 'w' && (board2D[i + 1][j-1] == 'R' ||board2D[i + 1][j-1] == 'B' || board2D[i + 1][j-1]== 'N' || board2D[i + 1][j-1] == 'Q' || board2D[i + 1][j-1]== 'K' || board2D[i + 1][j-1] == 'P')){
+                    continue;
+                  }
+
+
+                   //rank
+                  possibleMove[counterPossibleMove][0] = i + 1;
+                  //file
+                  possibleMove[counterPossibleMove][1] = j - 1;
+                  counterPossibleMove++;
+                }
+            }
+            if(i - 1 >= 0){
+                if(constPlayer == 'b' && (board2D[i - 1][j] == 'r' || board2D[i - 1][j] == 'b' || board2D[i - 1][j] == 'n' || board2D[i - 1][j] == 'q' || board2D[i - 1][j] == 'k' || board2D[i - 1][j] == 'p')){
+                  continue;
+                }
+
+                    if(constPlayer == 'w' && (board2D[i - 1][j] == 'R' ||board2D[i - 1][j] == 'B' || board2D[i - 1][j]== 'N' || board2D[i - 1][j] == 'Q' || board2D[i - 1][j]== 'K' || board2D[i - 1][j] == 'P')){
+                    continue;
+                  }
+                //rank
+                possibleMove[counterPossibleMove][0] = i - 1;
+                //file
+                possibleMove[counterPossibleMove][1] = j;
+                counterPossibleMove++;
+
+                 if(j + 1 < 8){
+                  if(constPlayer == 'b' && (board2D[i - 1][j+1] == 'r' || board2D[i - 1][j+1] == 'b' || board2D[i - 1][j+1] == 'n' || board2D[i - 1][j+1] == 'q' || board2D[i - 1][j+1] == 'k' || board2D[i - 1][j+1] == 'p')){
+                    continue;
+                  }
+
+                  if(constPlayer == 'w' && (board2D[i - 1][j+1] == 'R' ||board2D[i - 1][j+1] == 'B' || board2D[i - 1][j+1]== 'N' || board2D[i - 1][j+1] == 'Q' || board2D[i - 1][j+1]== 'K' || board2D[i - 1][j+1] == 'P')){
+                    continue;
+                  }
+                   //rank
+                  possibleMove[counterPossibleMove][0] = i - 1;
+                  //file
+                  possibleMove[counterPossibleMove][1] = j + 1;
+                  counterPossibleMove++;
+                }
+                if(j - 1 >= 0){
+                  if(constPlayer == 'b' && (board2D[i - 1][j-1] == 'r' || board2D[i - 1][j-1] == 'b' || board2D[i - 1][j-1] == 'n' || board2D[i - 1][j-1] == 'q' || board2D[i - 1][j-1] == 'k' || board2D[i - 1][j-1] == 'p')){
+                    continue;
+                  }
+
+                  if(constPlayer == 'w' && (board2D[i - 1][j-1] == 'R' ||board2D[i - 1][j-1] == 'B' || board2D[i - 1][j-1]== 'N' || board2D[i - 1][j-1] == 'Q' || board2D[i - 1][j-1]== 'K' || board2D[i - 1][j-1]== 'P')){
+                    continue;
+                  }
+                   //rank
+                  possibleMove[counterPossibleMove][0] = i - 1;
+                  //file
+                  possibleMove[counterPossibleMove][1] = j - 1;
+                  counterPossibleMove++;
+                }
+            }
+
+            if(j - 1 >= 0){
+              if(constPlayer == 'b' && (board2D[i][j-1] == 'r' || board2D[i][j-1] == 'b' || board2D[i][j-1] == 'n' || board2D[i][j-1] == 'q' || board2D[i][j-1] == 'k' || board2D[i][j-1] == 'p')){
+                  continue;
+                }
+
+                 if(constPlayer == 'w' && (board2D[i][j-1] == 'R' ||board2D[i][j-1]== 'B' || board2D[i][j-1]== 'N' || board2D[i][j-1] == 'Q' || board2D[i][j-1]== 'K' || board2D[i][j-1]== 'P')){
+                    continue;
+                  }
+              //rank
+                possibleMove[counterPossibleMove][0] = i;
+                //file
+                possibleMove[counterPossibleMove][1] = j - 1;
+                counterPossibleMove++;
+            }
+
+            if(j + 1 < 8){
+               if(constPlayer == 'b' && (board2D[i][j+1] == 'r' || board2D[i][j+1] == 'b' || board2D[i][j+1] == 'n' || board2D[i][j+1] == 'q' || board2D[i][j+1] == 'k' || board2D[i][j+1] == 'p')){
+                  continue;
+                }
+
+                if(constPlayer == 'w' && (board2D[i][j+1] == 'R' ||board2D[i][j+1]== 'B' || board2D[i][j+1]== 'N' || board2D[i][j+1] == 'Q' || board2D[i][j+1]== 'K' || board2D[i][j+1]== 'P')){
+                    continue;
+                  }
+              //rank
+                possibleMove[counterPossibleMove][0] = i;
+                //file
+                possibleMove[counterPossibleMove][1] = j + 1;
+                counterPossibleMove++;
+            }
+
+            for(int itera = 0; itera< counterPossibleMove; itera++){
+              if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
+                if(s->from_file != '0'){
+                  int fromFile = s->from_file - 'a';
+                  if(j == fromFile){
+                    //possible move for this piece
+                    board2D[i][j] = '0';
+                    board2D[s->rank-1][file] = piece_to_find;
+                    move = true;
+                  }
+                }else{
+                  //possible move for this piece
+                  board2D[i][j] = '0';
+                  board2D[s->rank-1][file] = piece_to_find;
+                  move = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    
+    
+
+  for (int row = 0; row < 8; ++row) {
+    for (int col = 0; col < 8; ++col) {
+      int index = index2DTo1D(row, col);
+      board->board[index] = board2D[row][col];
+      // if(piece_to_find == 'N' && index == 6){
+      //               /*char* result = (char*)malloc(sizeof(char) * 65);  
+      //               int index = 0;
+
+      //               for (int i = 0; i < 8; i++) {
+      //                   for (int j = 0; j < 8; j++) {
+      //                       result[index++] = board2D[i][j];
+      //                   }
+      //               }
+      //               char * sanStr = (char*)malloc(sizeof(char) * 4);
+      //               sanStr = sanmove_to_str(&s);
+      //               result[index] = '\0'; 
+      //               if(index != 0){
+      //                 ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+      //                 errmsg("test board at move : %s , array : %s",  sanStr, result)));
+      //               } */
+      //               ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+      //               errmsg("invalid move board2d %c  board1d %c: file : %i rank: %i, row %i , col %i",  board2D[0][6], board->board[index], file, s->rank, row, col)));
+      //             }
+    }
+  }
+
+  return move;
+
+
+}
+
 /*****************************************************************************/
 
 
@@ -794,27 +1562,34 @@ Datum getBoard(PG_FUNCTION_ARGS) {
     int32 half_moves = PG_GETARG_INT32(1);
 
     // Convert text input to C string
-    char *chessgame_str = chessgame_to_str(chessgame);
-
-    // Use smallchesslib functions to process the chess game
-    // Example: fetch the board state at the specified half-move
-    char fen[128]; // Buffer to store the FEN representation of the board state
-    // Example usage of smallchesslib, replace with appropriate functions from the library
-    int result = smallchesslib_get_board_state(chessgame_str, half_moves, fen);
-
-    // Check for errors or invalid moves
-    if (result != 0) {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
+    //char *chessgame_str = chessgame_to_str(chessgame);
+    Chessgame_helper* c_helper = chessgame_helper_parse(chessgame->game);
+    Chessboard* boardState = chessboard_make("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    for(int i =0; i < half_moves;i++){
+      //white move
+      if(!chessboard_update(boardState ,&c_helper->moves[i][0], 'w')){
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("invalid move %s: \"%s\" piece : %c , rank : %i, file : %i, from rank : %i, from file : %i", "chessboard cannot be update",  sanmove_to_str(&c_helper->moves[i][0]), c_helper->moves[i][0].piece, c_helper->moves[i][0].rank, c_helper->moves[i][0].file - 'a', c_helper->moves[i][0].from_rank, c_helper->moves[i][0].from_file -'a')));
+      }
+      //black move
+      if(!chessboard_update(boardState , &c_helper->moves[i][1], 'b')){
+        ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("invalid move %s: \"%s\" piece : %c , rank : %i, file : %i", "chessboard cannot be update",  sanmove_to_str(&c_helper->moves[i][1]), c_helper->moves[i][1].piece, c_helper->moves[i][1].rank, c_helper->moves[i][1].file - 'a')));
+      }
     }
 
-    // Convert the FEN string to a PostgreSQL text type
-    text *fen_text = cstring_to_text(fen);
+    // if (result != 0) {
+    //     ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
+    // }
+
+    // // Convert the FEN string to a PostgreSQL text type
+    // text *fen_text = cstring_to_text(fen);
 
     // Return the FEN representation of the board state
-    PG_RETURN_TEXT_P(fen_text);
+   PG_RETURN_CHESSBOARD_P(boardState);
 }
 
-PG_FUNCTION_INFO_V1(hasBoard);
+/*PG_FUNCTION_INFO_V1(hasBoard);
 Datum hasBoard(PG_FUNCTION_ARGS) {
     if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2)) {
         ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
@@ -839,4 +1614,4 @@ Datum hasBoard(PG_FUNCTION_ARGS) {
     bool contains_board_state = smallchesslib_contains_board_state(chessgame_str, chessboard_str, half_moves);
 
     PG_RETURN_BOOL(contains_board_state);
-}
+}*/

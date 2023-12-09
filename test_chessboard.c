@@ -164,27 +164,45 @@ typedef struct
 //     sscanf(&fen[index], "%d", &board->fullMoveNumber);
 // }
 
+// Convertit un indice 2D en indice 1D
+int index2DTo1D(int row, int col) {
+    return row * 8 + col;
+}
+
 // /* Function to initialize a chessboard with standard starting positions */
 void fill_board_from_fen(const char *fen, Chessboard* board) {
-    int index = 0;
-
+    char board2D[8][8];
+    int rank = 7;
+    int file = 0;
+    int index = 63;
     // Parse the piece positions
     while (*fen && *fen != ' ') {
         if (*fen == '/') {
             fen++;
+            rank --;
+            file =0;
         } else if (*fen >= '1' && *fen <= '8') {
             // Empty squares
             int count = *fen - '0';
             for (int i = 0; i < count; i++) {
-                board->board[index] = '0';
+                board2D[rank][file] = '0';
                 index++;
+                file++;
             }
             fen++;
         } else {
             // Piece
-            board->board[index] = *fen;
+            board2D[rank][file] = *fen;
             index++;
             fen++;
+            file++;
+        }
+    }
+
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+        int index = index2DTo1D(row, col);
+        board->board[index] = board2D[row][col];
         }
     }
 }
@@ -478,6 +496,14 @@ int main() {
             printf("\n");
         }
     }
+
+    char fen2[100];  // Assurez-vous que la taille est suffisante pour contenir la notation FEN.
+    strcpy(fen2,chessboard_to_str(&chessboard));
+
+    // Affichez la notation FEN.
+    printf("FEN Notation: %s\n", fen2);
+
+    
 
     return 0;
 }
