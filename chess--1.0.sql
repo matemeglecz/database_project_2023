@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION chessgame_send(chessgame)
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE TYPE chessgame (
-  internallength = 512,
+  internallength = 5000,
   input          = chessgame_in,
   output         = chessgame_out,
   receive        = chessgame_recv,
