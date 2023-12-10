@@ -1,14 +1,3 @@
-/*
- * complex.h
- */
-
-/* Structure to represent complex numbers */
-typedef struct
-{
-  double    a,
-            b;
-} Complex;
-
 /* deine one move in SAN */
 typedef struct
 {
@@ -35,18 +24,10 @@ typedef struct
 
 typedef struct 
 {
-  char game[512];
+  char game[5000];
 } Chessgame;
 
 
-
-
-/* fmgr macros complex type */
-
-#define DatumGetComplexP(X)  ((Complex *) DatumGetPointer(X))
-#define ComplexPGetDatum(X)  PointerGetDatum(X)
-#define PG_GETARG_COMPLEX_P(n) DatumGetComplexP(PG_GETARG_DATUM(n))
-#define PG_RETURN_COMPLEX_P(x) return ComplexPGetDatum(x)
 
 #define DatumGetChessgameP(X)  ((Chessgame *) DatumGetPointer(X))
 #define ChessgamePGetDatum(X)  PointerGetDatum(X)
