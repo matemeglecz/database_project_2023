@@ -1,17 +1,8 @@
-/*
- * complex.C 
- *
- * PostgreSQL Complex Number Type:
- *
- * complex '(a,b)'
- *
- * Author: Maxime Schoemans <maxime.schoemans@ulb.be>
- */
-
 #include <stdio.h>
 #include <postgres.h>
 #include <float.h>
 #include <math.h>
+#include "utils/array.h"
 #include <stdlib.h>
 
 #include "utils/builtins.h"
@@ -19,21 +10,6 @@
 #include "chess.h"
 
 
-
-/*char *strndup(char *str, int chars)
-{
-    char *buffer;
-    int n;
-
-    buffer = (char *) malloc(chars +1);
-    if (buffer)
-    {
-        for (n = 0; ((n < chars) && (str[n] != 0)) ; n++) buffer[n] = str[n];
-        buffer[n] = 0;
-    }
-
-    return buffer;
-}*/
 
 /*****************************************************************************/
 
@@ -43,10 +19,9 @@ chessgame_make(char* game)
 {
   Chessgame *c = (Chessgame*)palloc(sizeof(Chessgame));
 
-  // copy the string to the game
-  //c->game = (char*)palloc(sizeof(char) * strlen(game));
   strcpy(c->game, game);
   
+  pfree(game);
 
   if(c->game == NULL)
   {
@@ -75,7 +50,6 @@ sanmove_to_str(const SANmove* s)
     }
     if(s->from_file != '0')
     {
-        //strcat(result, &s->from_file);
         int len = strlen(result);
         result[len] = s->from_file;
         result[len+1] = '\0';
@@ -92,7 +66,6 @@ sanmove_to_str(const SANmove* s)
     }
     if(s->file != '0')
     {
-        //strcat(result, &s->file);
         int len = strlen(result);
         result[len] = s->file;
         result[len+1] = '\0';
@@ -131,19 +104,24 @@ static char *
 chessgamehelper_to_str(const Chessgame_helper *c)
 {
     // create string from c moves
-    char* result = (char*)palloc(sizeof(char) * 256);
+    char* result = (char*)palloc(sizeof(char) * 5000);
     result[0] = '\0';
     
     for (int i = 0; i < c->size; ++i)
     {
-        char* move = (char*)palloc(sizeof(char) * 10);
+        char* move = (char*)palloc(sizeof(char) * 30);
         sprintf(move,"%d. ", i+1);
         strcat(result, move);
-        strcat(result, sanmove_to_str(&c->moves[i][0]));
+        pfree(move);
+        char* white_move = sanmove_to_str(&c->moves[i][0]);
+        strcat(result, white_move);
+        pfree(white_move);
         strcat(result, " ");
         if(c->moves[i][1].piece != '0'){
-          strcat(result, sanmove_to_str(&c->moves[i][1]));
+          char* black_move = sanmove_to_str(&c->moves[i][1]);
+          strcat(result, black_move);
           strcat(result, " ");
+          pfree(black_move);
         }
 
     }
@@ -166,97 +144,92 @@ sanmove_parse(char *in)
 {
   SANmove c;
   // initialize all the booleans to false
-    c.capture = false;
-    c.promotion = false;
-    c.check = false;
-    c.checkmate = false;
-    c.drawoffer = false;
-    c.castle = false;
-    // initialize all the chars to 0
-    c.piece = '0';
-    c.file = '0';
-    c.rank = 0;
-    c.from_file = '0';
-    c.from_rank = 0;
-  //copy the input string to a new string
-    char *str = (char*)palloc(sizeof(in));
-    strcpy(str, in);
-  //split the input into substrings devided by spaces
+  c.capture = false;
+  c.promotion = false;
+  c.check = false;
+  c.checkmate = false;
+  c.drawoffer = false;
+  c.castle = false;
+  // initialize all the chars to 0
+  c.piece = '0';
+  c.file = '0';
+  c.rank = 0;
+  c.from_file = '0';
+  c.from_rank = 0;
 
-    //if the substring is a number, it is the move number
-    if (atoi(in) != 0)
-    {
-      return c;
-    }
-    //if the first chararacter is K or Q or R or B or N, store the the piece else store p in piece we will call pawns p
-    if (in[0] == 'K' || in[0] == 'Q' || in[0] == 'R' || in[0] == 'B' || in[0] == 'N')
-    {
-      c.piece = in[0];
-    }
-    else
-    {
-      c.piece = 'p';
-    }
-    // if the substring contains an x, it is a capture
-    if (strchr(in, 'x') != NULL)
-    {
-      c.capture = true;
-    }
-    //if the substring contains a +, it is a check
-    if (strchr(in, '+') != NULL)
-    {
-      c.check = true;
-    }
-    //if the substring contains a #, it is a mate
-    if (strchr(in, '#') != NULL)
-    {
-      c.checkmate = true;
-    }
-    //if the substring contains a = or a '(' and ')' or a '/', it is a promotion
-    if (strchr(in, '=') != NULL || (strchr(in, '(') != NULL && strchr(in, ')') != NULL) || strchr(in, '/') != NULL)
-    {
-      c.promotion = true;
-    }
-    //if the substring contains a 0-0 or 0-0-0 or O-O or O-O-O, it is a castle
-    if (strstr(in, "0-0") != NULL || strstr(in, "O-O") != NULL)
-    {
-      c.castle = true;
-    }
-    //if the substring contains a =, it is a drawoffer
-    if (strchr(in, '=') != NULL)
-    {
-      c.drawoffer = true;
-    }
+  //if the substring is a number, it is the move number
+  if (atoi(in) != 0 || in[0] == '\0')
+  {
+    return c;
+  }
+  //if the first chararacter is K or Q or R or B or N, store the the piece else store p in piece we will call pawns p
+  if (in[0] == 'K' || in[0] == 'Q' || in[0] == 'R' || in[0] == 'B' || in[0] == 'N')
+  {
+    c.piece = in[0];
+  }
+  else
+  {
+    c.piece = 'p';
+  }
+  // if the substring contains an x, it is a capture
+  if (strchr(in, 'x') != NULL)
+  {
+    c.capture = true;
+  }
+  //if the substring contains a +, it is a check
+  if (strchr(in, '+') != NULL)
+  {
+    c.check = true;
+  }
+  //if the substring contains a #, it is a mate
+  if (strchr(in, '#') != NULL)
+  {
+    c.checkmate = true;
+  }
+  //if the substring contains a = or a '(' and ')' or a '/', it is a promotion
+  if (strchr(in, '=') != NULL || (strchr(in, '(') != NULL && strchr(in, ')') != NULL) || strchr(in, '/') != NULL)
+  {
+    c.promotion = true;
+  }
+  //if the substring contains a 0-0 or 0-0-0 or O-O or O-O-O, it is a castle
+  if (strstr(in, "0-0") != NULL || strstr(in, "O-O") != NULL)
+  {
+    c.castle = true;
+  }
+  //if the substring contains a =, it is a drawoffer
+  if (strchr(in, '=') != NULL)
+  {
+    c.drawoffer = true;
+  }
 
-    //iterate through the characters of the substring backwards
-    bool file_found = false;
-    bool rank_found = false;
-    for (int i = strlen(in) - 1; i >= 0; i--)
+  //iterate through the characters of the substring backwards
+  bool file_found = false;
+  bool rank_found = false;
+  for (int i = strlen(in) - 1; i >= 0; i--)
+  {
+    //if the character is a number, it is the rank
+    if (atoi(&in[i]) >= 1 && atoi(&in[i]) <= 8)
     {
-      //if the character is a number, it is the rank
-      if (atoi(&in[i]) >= 1 && atoi(&in[i]) <= 8)
+      if (rank_found==false){
+        c.rank = atoi(&in[i]);
+        rank_found = true;
+      } else
       {
-        if (rank_found==false){
-          c.rank = atoi(&in[i]);
-          rank_found = true;
-        } else
-        {
-          c.from_rank = atoi(&in[i]);
-        }
-      }
-      //if the character is a letter, it is the file
-      if (in[i] >= 'a' && in[i] <= 'h')
-      {
-        if(file_found==false){
-          c.file = in[i];
-          file_found = true;
-        } else
-        {
-          c.from_file = in[i];
-        }
+        c.from_rank = atoi(&in[i]);
       }
     }
-
+    //if the character is a letter, it is the file
+    if (in[i] >= 'a' && in[i] <= 'h')
+    {
+      if(file_found==false){
+        c.file = in[i];
+        file_found = true;
+      } else
+      {
+        c.from_file = in[i];
+      }
+    }
+  }
 
   return c;
 }
@@ -265,7 +238,7 @@ static Chessgame_helper *
 chessgame_helper_parse(char in[])
 {
   //remove line breaks and copy the input string to a new string
-  char *str = (char*)palloc(sizeof(char) * strlen(in));
+  char *str = (char*)palloc(sizeof(char) * (strlen(in)+1));
   int len = strlen(in);
   int j = 0;
   for (int i = 0; i < len; ++i)
@@ -279,22 +252,20 @@ chessgame_helper_parse(char in[])
 
   str[j] = '\0';
 
-  //remove line breaks
-  //str = strtok(str, "\n");
 
   // steps in game
   int step = 0;
-  //create a 2 dim dynamic array for storing all the move pairs 2 by 100
-  SANmove **allmoves = (SANmove **)palloc(sizeof(SANmove*) * 100);
-  for (int i = 0; i < 100; ++i)
+  //create a 2 dim dynamic array for storing all the move pairs 2 by 270
+  SANmove **allmoves = (SANmove **)palloc(sizeof(SANmove*) * 270);
+  for (int i = 0; i < 270; ++i)
   {
       allmoves[i] = (SANmove *)palloc(2 * sizeof(SANmove));
 
   }
 
+  char* str_copy = str;
 
   //iterate the str until a '.' is found, and process the string between the two dots, the this for the whole string
- 
   char *dot = strchr(str, '.');
   if (dot != NULL)
   {
@@ -316,8 +287,13 @@ chessgame_helper_parse(char in[])
       }
       //char san[dot2 - dot];
       char san[64];
-      strcpy(san, strndup(dot + 1, dot2 - dot - 1));
-        san[dot2 - dot - 1] = '\0';
+      char* copied = strndup(dot + 1, dot2 - dot - 1);
+      
+      strcpy(san, copied);
+      
+      free(copied);
+      
+      san[dot2 - dot - 1] = '\0';
       // split by spaces and process san with sanmove_parse each substring
       char delim[] = " ";
       char *token = strtok(san, delim);
@@ -331,12 +307,17 @@ chessgame_helper_parse(char in[])
       // store the sanmove in allmoves
       allmoves[step][0] = sanmoves[0];
       allmoves[step][1] = sanmoves[1];
+      step++;
+      if(strlen(dot2) < 1){
+        end_reached = true;
+        continue;
+      }
       dot = dot2 + 1;
       dot2 = strchr(dot, '.');
-      step++;
-    
     }
   }
+  
+  pfree(str_copy);
   
   Chessgame_helper *c_helper = (Chessgame_helper*)palloc(sizeof(Chessgame_helper));
   c_helper->moves = allmoves;
@@ -347,18 +328,16 @@ chessgame_helper_parse(char in[])
 static Chessgame *
 chessgame_parse(char in[])
 {
-/*
-  if (sscanf(str, " ( %lf , %lf )", &a, &b) != 2)
-    ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-      errmsg("invalid input syntax for type %s: \"%s\"", "complex", str)));
-      */
-
-  Chessgame_helper* c_helper = chessgame_helper_parse(in);
-  
+  Chessgame_helper* c_helper = chessgame_helper_parse(in); 
 
   char* game_str = chessgamehelper_to_str(c_helper);
 
-  
+  for (int i = 0; i < 270; ++i)
+  { 
+      pfree(c_helper->moves[i]);
+  }
+  pfree(c_helper->moves);
+  pfree(c_helper);
 
   return chessgame_make(game_str);
 }
@@ -379,7 +358,6 @@ Datum
 chessgame_out(PG_FUNCTION_ARGS)
 {
   Chessgame *c = PG_GETARG_CHESSGAME_P(0);
-  //char* result = c->game;
   char *result = palloc(sizeof(char) * strlen(c->game));
   strcpy(result, c->game);
   PG_FREE_IF_COPY(c, 0);
@@ -467,8 +445,6 @@ getFirstMoves(PG_FUNCTION_ARGS)
   float full_moves = ((float)n)/2;
   int needed_rounds = ceil(full_moves);
 
-  // create a new chessgame_helper
-
   c_helper->size = needed_rounds;
   if(n % 2 == 1)
       c_helper->moves[needed_rounds-1][1].piece = '0';
@@ -478,47 +454,261 @@ getFirstMoves(PG_FUNCTION_ARGS)
   // create a new chessgame
   Chessgame* result = chessgame_make(game_str);
 
+  for (int i = 0; i < 270; i++)
+  {
+      pfree(c_helper->moves[i]);
+  }
+  pfree(c_helper->moves);
+  pfree(c_helper);
+
   PG_FREE_IF_COPY(c, 0);
   PG_RETURN_CHESSGAME_P(result);
 }
 
-PG_FUNCTION_INFO_V1(hasOpening);
-Datum 
-hasOpening(PG_FUNCTION_ARGS)
+
+static bool
+hasOpeningInternal(Chessgame* c1, Chessgame* c2)
+{
+  // parse c1->game into chessgame_helper
+  Chessgame_helper* c1_helper = chessgame_helper_parse(c1->game);
+  // parse c2->game into chessgame_helper
+  Chessgame_helper* c2_helper = chessgame_helper_parse(c2->game);
+
+  bool result = true;
+
+  if (c2_helper->size > c1_helper->size)
+      result = false;
+  // iterate through c2_helper->moves
+  for(int i=0; i<c2_helper->size;i++)
+  {
+      char* c1_move_0_str = sanmove_to_str(&c1_helper->moves[i][0]);
+      char* c2_move_0_str = sanmove_to_str(&c2_helper->moves[i][0]);
+
+      if(strcmp(c1_move_0_str, c2_move_0_str) != 0){
+          result = false;
+      }
+      pfree(c1_move_0_str);
+      pfree(c2_move_0_str);
+      if (!result){
+        break;
+      }
+      
+      if(c2_helper->moves[i][1].piece == '0'){
+          break;
+      }
+
+      char* c1_move_1_str = sanmove_to_str(&c1_helper->moves[i][1]);
+      char* c2_move_1_str = sanmove_to_str(&c2_helper->moves[i][1]);
+      if(strcmp(c1_move_1_str, c2_move_1_str) != 0){
+          result = false;
+      }
+
+
+      pfree(c1_move_1_str);
+      pfree(c2_move_1_str);
+
+      if (!result){
+        break;
+      }
+  }
+  
+
+  // free moves in c1_helper
+  for (int i = 0; i < 270; ++i)
+  { 
+      pfree(c1_helper->moves[i]);
+  }
+  pfree(c1_helper->moves);
+  pfree(c1_helper);
+
+  // free moves in c2_helper
+  for (int i = 0; i < 270; ++i)
+  { 
+      pfree(c2_helper->moves[i]);
+  }
+  pfree(c2_helper->moves);
+  pfree(c2_helper);
+  
+  return result;
+}
+
+/************************************************************************/
+
+static int
+chessgame_cmp_internal(Chessgame *c1, Chessgame *c2)
+{
+    bool c1_in_c2 = hasOpeningInternal(c2->game, c1->game);
+    bool c2_in_c1 = hasOpeningInternal(c1->game, c2->game);
+
+    if (c1_in_c2 && c2_in_c1) {
+        return 0;
+    } else if (c1_in_c2) {
+        return -1;
+    } else if (c2_in_c1) {
+        return 1;
+    } else {
+        return 1;
+    }
+}
+
+PG_FUNCTION_INFO_V1(chessgame_eq);
+Datum
+chessgame_eq(PG_FUNCTION_ARGS)
 {
     Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
     Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
-    // parse c1->game into chessgame_helper
-    Chessgame_helper* c1_helper = chessgame_helper_parse(c1->game);
-    // parse c2->game into chessgame_helper
-    Chessgame_helper* c2_helper = chessgame_helper_parse(c2->game);
-    bool result = true;
-    // iterate through c2_helper->moves
-    for(int i=0; i<c2_helper->size;i++)
-    {
-        if(strcmp(sanmove_to_str(&c1_helper->moves[i][0]), sanmove_to_str(&c2_helper->moves[i][0])) != 0)
-            result = false;
-            break;
-        if(c2_helper->moves[i][1].piece == '0')
-            break;
-        if(strcmp(sanmove_to_str(&c1_helper->moves[i][1]), sanmove_to_str(&c2_helper->moves[i][1])) != 0)
-            result = false;
-            break;
-    }
-    
-
+    bool result = chessgame_cmp_internal(c1, c2) == 0;
     PG_FREE_IF_COPY(c1, 0);
     PG_FREE_IF_COPY(c2, 1);
     PG_RETURN_BOOL(result);
 }
 
+PG_FUNCTION_INFO_V1(chessgame_ne);
+Datum
+chessgame_ne(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    bool result = chessgame_cmp_internal(c1, c2) != 0;
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(chessgame_lt);
+Datum
+chessgame_lt(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    bool result = chessgame_cmp_internal(c1, c2) == -1;
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(chessgame_le);
+Datum
+chessgame_le(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    bool result = chessgame_cmp_internal(c1, c2) <= 0;
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(chessgame_gt);
+Datum
+chessgame_gt(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    bool result = chessgame_cmp_internal(c1, c2) == 1;
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(chessgame_ge);
+Datum
+chessgame_ge(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    bool result = chessgame_cmp_internal(c1, c2) >= 0;
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(chessgame_cmp);
+Datum
+chessgame_cmp(PG_FUNCTION_ARGS)
+{
+    Chessgame *c1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *c2 = PG_GETARG_CHESSGAME_P(1);
+    int result = chessgame_cmp_internal(c1, c2);
+    PG_FREE_IF_COPY(c1, 0);
+    PG_FREE_IF_COPY(c2, 1);
+    PG_RETURN_INT32(result);
+}
+
+PG_FUNCTION_INFO_V1(chessgame_extractkeys);
+Datum chessgame_extractkeys(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(chessgame_consistent);
+Datum chessgame_consistent(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(chessgame_compare);
+Datum chessgame_compare(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(chessgame_union);
+Datum chessgame_union(PG_FUNCTION_ARGS);
+
+Datum
+chessgame_extractkeys(PG_FUNCTION_ARGS)
+{
+    Chessgame *game = PG_GETARG_CHESSGAME_P(0);
+    // Extract keys from game. This could be an array of chessboard states,
+    // or some other representation of the game.
+    // You need to implement this function.
+    Datum *keys = extract_keys_from_chessgame(game);
+
+    // Return the keys as a Datum.
+    PG_RETURN_POINTER(keys);
+}
+
+Datum
+chessgame_consistent(PG_FUNCTION_ARGS)
+{
+    // Get the query and the entry from the arguments.
+    Chessgame *query = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *entry = PG_GETARG_CHESSGAME_P(1);
+
+    // Check if the entry matches the query. You need to implement this function.
+    bool matches = chessgame_matches_query(query, entry);
+
+    // Return the result.
+    PG_RETURN_BOOL(matches);
+}
+
+Datum
+chessgame_compare(PG_FUNCTION_ARGS)
+{
+    // Get the two chessgames from the arguments.
+    Chessgame *game1 = PG_GETARG_CHESSGAME_P(0);
+    Chessgame *game2 = PG_GETARG_CHESSGAME_P(1);
+
+    // Compare the two chessgames. You need to implement this function.
+    int comparison = compare_chessgames(game1, game2);
+
+    // Return the result.
+    PG_RETURN_INT32(comparison);
+}
+
+Datum
+chessgame_union(PG_FUNCTION_ARGS)
+{
+    // Get the array of chessgames from the arguments.
+    ArrayType *array = PG_GETARG_ARRAYTYPE_P(0);
+
+    // Compute the union of the chessgames. You need to implement this function.
+    Chessgame *union_game = compute_union_of_chessgames(array);
+
+    // Return the result.
+    PG_RETURN_POINTER(union_game);
+}
 
 /*****************************************************************************/
+
 
 // Convertit un indice 2D en indice 1D
 int index2DTo1D(int row, int col) {
     return row * 8 + col;
 }
+
 
 static Chessboard *
 chessboard_make(char *fen) {
@@ -705,7 +895,6 @@ void index1DTo2D(int index, int *row, int *col) {
     *row = index / 8;
     *col = index % 8;
 }
-
 
 static bool chessboard_update(Chessboard* board, const SANmove* s, char constPlayer){
   // Convertit le tableau 1D en tableau 2D
@@ -1692,27 +1881,34 @@ Datum getBoard(PG_FUNCTION_ARGS) {
 
 PG_FUNCTION_INFO_V1(hasBoard);
 Datum hasBoard(PG_FUNCTION_ARGS) {
-    if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2)) {
+    if (PG_ARGISNULL(0)|| PG_ARGISNULL(1) ||PG_ARGISNULL(2)) {
         ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
     }
 
     Chessgame *chessgame = PG_GETARG_CHESSGAME_P(0);
     Chessboard *chessboard = PG_GETARG_CHESSBOARD_P(1);
-    int32 half_moves = PG_GETARG_INT32(2);
 
-    // Convert text input to C string
-    char *chessgame_text = chessgame_to_str(chessgame);
-     char *chessboard_text = chessboard_to_str(chessboard);
+    int32 half_movs = PG_GETARG_INT32(2);
 
-    if (half_moves < 0) {
+    bool ret_val = false ;
+
+
+    if (half_movs < 0) {
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
     }
+    Chessboard *chessboard_aftermove = getBoard(chessgame, half_movs);
+    // I assume that getBoard will return null if the halfmoves invalid
+    if (chessboard_aftermove)
+    {
+        char *chessboard_text = chessboard_to_str(chessboard);
+        char *chessboard_aftermove_text = chessboard_to_str(chessboard_aftermove);
 
-    char *chessgame_str = text_to_cstring(chessgame_text);
-    char *chessboard_str = text_to_cstring(chessboard_text);
-
-    // Check if the chess game contains the given board state in its initial N half-moves
-    bool contains_board_state = smallchesslib_contains_board_state(chessgame_str, chessboard_str, half_moves);
-
-    PG_RETURN_BOOL(contains_board_state);
+        // Comparing chessboard_text and chessboard_aftermove_text if there is no 
+        //differences between them then ret_val becomes true, so the function does
+        if (strcmp(chessboard_text,chessboard_aftermove_text) == 0)
+        {
+            ret_val = true;
+        }
+    }
+    PG_RETURN_BOOL(ret_val);
 }

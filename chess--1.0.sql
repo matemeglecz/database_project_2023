@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION chessgame_send(chessgame)
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE TYPE chessgame (
-  internallength = 512,
+  internallength = 5000,
   input          = chessgame_in,
   output         = chessgame_out,
   receive        = chessgame_recv,
@@ -71,7 +71,136 @@ CREATE FUNCTION hasOpening(chessgame, chessgame)
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 */
 /******************************************************************************/
+/******************************************************************************/
 
+/* B-Tree comparison functions */
+
+CREATE OR REPLACE FUNCTION chessgame_eq(chessgame, chessgame)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_lt(chessgame, chessgame)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_le(chessgame, chessgame)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_gt(chessgame, chessgame)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_ge(chessgame, chessgame)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+
+/******************************************************************************/
+
+/* B-Tree comparison operators */
+
+CREATE OPERATOR = (
+  LEFTARG = chessgame, RIGHTARG = chessgame,
+  PROCEDURE = chessgame_eq,
+  COMMUTATOR = =, NEGATOR = <>
+);
+CREATE OPERATOR < (
+  LEFTARG = chessgame, RIGHTARG = chessgame,
+  PROCEDURE = chessgame_lt,
+  COMMUTATOR = >, NEGATOR = >=
+);
+CREATE OPERATOR <= (
+  LEFTARG = chessgame, RIGHTARG = chessgame,
+  PROCEDURE = chessgame_le,
+  COMMUTATOR = >=, NEGATOR = >
+);
+CREATE OPERATOR >= (
+  LEFTARG = chessgame, RIGHTARG = chessgame,
+  PROCEDURE = chessgame_ge,
+  COMMUTATOR = <=, NEGATOR = <
+);
+CREATE OPERATOR > (
+  LEFTARG = chessgame, RIGHTARG = chessgame,
+  PROCEDURE = chessgame_gt,
+  COMMUTATOR = <, NEGATOR = <=
+);
+
+CREATE OR REPLACE FUNCTION hasOpening(val1 chessgame, val2 chessgame) RETURNS boolean AS $$
+  BEGIN
+  RETURN (val2 <= val1);
+  END; $$
+  LANGUAGE PLPGSQL;
+
+/******************************************************************************/
+
+/* B-Tree support function */
+
+CREATE OR REPLACE FUNCTION chessgame_cmp(chessgame, chessgame)
+  RETURNS integer
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+/******************************************************************************/
+
+/* B-Tree operator class */
+
+CREATE OPERATOR CLASS chessgame_ops
+DEFAULT FOR TYPE chessgame USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       chessgame_cmp(chessgame, chessgame);
+
+
+/******************************************************************************/
+/* GIN index functions */
+
+CREATE OR REPLACE FUNCTION chessgame_extractkeys(chessgame)
+  RETURNS internal
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_consistent(internal, integer, chessgame, integer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_compare(internal, integer, internal, integer)
+  RETURNS integer
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION chessgame_union(internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+
+/******************************************************************************/
+
+/* Operator class for GIN index */
+
+CREATE OPERATOR CLASS gin_chessgame_ops
+FOR TYPE chessgame USING gin AS
+    OPERATOR 1  array_overlaps(anyarray, anyarray),
+    OPERATOR 2  array_contains(anyarray, anyarray),
+    OPERATOR 3  array_contained(anyarray, anyarray),
+    FUNCTION 1  chessgame_extractkeys(chessgame),
+    FUNCTION 2  chessgame_consistent(internal, integer, chessgame, integer),
+    FUNCTION 3  chessgame_compare(internal, integer, internal, integer),
+    FUNCTION 4  chessgame_union(internal, internal),
+    STORAGE     chessboard;
+
+/******************************************************************************/
 CREATE OR REPLACE FUNCTION hasOpening(val1 chessgame, val2 chessgame) RETURNS boolean AS $$
   BEGIN
   RETURN (val2 <= val1);
@@ -139,9 +268,4 @@ CREATE FUNCTION chessboard(cstring)
 CREATE FUNCTION getBoard(chessgame, integer)
   RETURNS chessboard
   AS 'MODULE_PATHNAME', 'getBoard'
-  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-
-CREATE FUNCTION hasBoard(chessgame, chessboard, integer)
-  RETURNS boolean
-  AS 'MODULE_PATHNAME', 'hasBoard'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
