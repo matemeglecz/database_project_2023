@@ -515,6 +515,11 @@ hasOpening(PG_FUNCTION_ARGS)
 
 /*****************************************************************************/
 
+// Convertit un indice 2D en indice 1D
+int index2DTo1D(int row, int col) {
+    return row * 8 + col;
+}
+
 static Chessboard *
 chessboard_make(char *fen) {
 
@@ -701,10 +706,6 @@ void index1DTo2D(int index, int *row, int *col) {
     *col = index % 8;
 }
 
-// Convertit un indice 2D en indice 1D
-int index2DTo1D(int row, int col) {
-    return row * 8 + col;
-}
 
 static bool chessboard_update(Chessboard* board, const SANmove* s, char constPlayer){
   // Convertit le tableau 1D en tableau 2D
@@ -1689,7 +1690,7 @@ Datum getBoard(PG_FUNCTION_ARGS) {
    PG_RETURN_CHESSBOARD_P(boardState);
 }
 
-/*PG_FUNCTION_INFO_V1(hasBoard);
+PG_FUNCTION_INFO_V1(hasBoard);
 Datum hasBoard(PG_FUNCTION_ARGS) {
     if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2)) {
         ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
@@ -1714,4 +1715,4 @@ Datum hasBoard(PG_FUNCTION_ARGS) {
     bool contains_board_state = smallchesslib_contains_board_state(chessgame_str, chessboard_str, half_moves);
 
     PG_RETURN_BOOL(contains_board_state);
-}*/
+}

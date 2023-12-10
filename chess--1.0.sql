@@ -140,3 +140,8 @@ CREATE FUNCTION getBoard(chessgame, integer)
   RETURNS chessboard
   AS 'MODULE_PATHNAME', 'getBoard'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION hasBoard(chessgame, chessboard, integer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'hasBoard'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
