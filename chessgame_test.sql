@@ -14,16 +14,20 @@ select * from t;
 -- Step 1: Create a function to generate random chess games
 CREATE OR REPLACE FUNCTION random_game() RETURNS text AS $$
 DECLARE
-  moves text[] := ARRAY['1. e4', '1. d4', '1. Nf3', '1. c4'];
+  moves1 text[] := ARRAY['1. e4', '1. d4', '1. Nf3', '1. c4'];
+  moves2 text[] := ARRAY[' e5', ' d5', ' Nf6', ' c6'];
+  moves3 text[] := ARRAY[' 2. Nf3', ' 2. d4', ' 2. Bc4', ' 2. Nc3'];
 BEGIN
-  RETURN moves[1+random()*(array_length(moves, 1)-1)::int] || ' e5 2. Nf3 Nc6 3. Bb5';
+  RETURN moves1[1+random()*(array_length(moves1, 1)-1)::int] || 
+         moves2[1+random()*(array_length(moves2, 1)-1)::int] || 
+         moves3[1+random()*(array_length(moves3, 1)-1)::int];
 END;
 $$ LANGUAGE plpgsql;
 
 -- Step 2: Insert a large number of random games into your table
 DO $$
 BEGIN
-  FOR i IN 1..200 LOOP
+  FOR i IN 1..50000 LOOP
     INSERT INTO t (g) VALUES (random_game());
   END LOOP;
 END;
@@ -31,8 +35,8 @@ $$;
 
 SELECT COUNT(*) FROM t;
 
-EXPLAIN ANALYZE SELECT COUNT(*) FROM t WHERE hasOpening(g, '1. e4');
+EXPLAIN ANALYZE SELECT COUNT(*) FROM t WHERE hasOpening(g, '1. e5');
 
 create index t_idx on t(g);
 
-EXPLAIN ANALYZE SELECT COUNT(*) FROM t WHERE hasOpening(g, '1. e4');
+EXPLAIN ANALYZE SELECT COUNT(*) FROM t WHERE hasOpening(g, '1. e5');
