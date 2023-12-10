@@ -171,6 +171,85 @@ CREATE OR REPLACE FUNCTION hasOpening(val1 chessgame, val2 chessgame) RETURNS bo
 
 
 
+/* GIN operator class */
+
+-- CREATE OR REPLACE FUNCTION chessgame_extractkeys(chessgame)
+--   RETURNS internal
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION chessgame_consistent(internal, integer, chessgame, integer)
+--   RETURNS boolean
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION chessgame_compare(internal, integer, internal, integer)
+--   RETURNS integer
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION chessgame_union(internal, internal)
+--   RETURNS internal
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- /******************************************************************************/
+
+-- /* Operator class for GIN index */
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_extractkeys(chessgame)
+--   RETURNS internal
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_consistent(internal, integer, internal, integer)
+--   RETURNS boolean
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_union(internal, internal)
+--   RETURNS internal
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_compare(internal, integer, internal, integer)
+--   RETURNS integer
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- /* GIN index functions */
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_extractkeys(chessgame)
+--   RETURNS internal
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_consistent(internal, integer, chessgame, integer)
+--   RETURNS boolean
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_compare(internal, integer, internal, integer)
+--   RETURNS integer
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- CREATE OR REPLACE FUNCTION gin_chessgame_union(internal, internal)
+--   RETURNS internal
+--   AS 'MODULE_PATHNAME'
+--   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+-- /* Operator class for GIN index */
+
+-- CREATE OPERATOR CLASS gin_chessgame_ops
+-- FOR TYPE chessgame USING gin AS
+--     OPERATOR 1  gin_chessgame_union(internal, internal),
+--     OPERATOR 2  gin_chessgame_union(internal, internal),
+--     OPERATOR 3  gin_chessgame_compare(internal, integer, internal, integer),
+--     OPERATOR 4  gin_chessgame_compare(internal, integer, internal, integer),
+--     FUNCTION 1  gin_chessgame_extractkeys(chessgame),
+--     FUNCTION 2  gin_chessgame_consistent(internal, integer, internal, integer),
+--     STORAGE     chessgame;
   /********************************************************************/
 
   CREATE OR REPLACE FUNCTION chessboard_in(cstring)
@@ -232,4 +311,9 @@ CREATE FUNCTION chessboard(cstring)
  CREATE FUNCTION getBoard(chessgame, integer)
   RETURNS chessboard
   AS 'MODULE_PATHNAME', 'getBoard'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION hasBoard(chessgame, chessboard, integer)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'hasBoard'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;

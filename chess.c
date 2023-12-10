@@ -7,7 +7,7 @@
 #include "utils/builtins.h"
 #include "libpq/pqformat.h"
 #include "chess.h"
-
+#define nullptr ((void*)0)
 
 
 /*****************************************************************************/
@@ -637,6 +637,14 @@ chessgame_cmp(PG_FUNCTION_ARGS)
 
 
 /*****************************************************************************/
+int index2DTo1D(int row, int col) {
+    return row * 8 + col;
+}
+
+void index1DTo2D(int index, int *row, int *col) {
+    *row = index / 8;
+    *col = index % 8;
+}
 
 static Chessboard *
 chessboard_make(char *fen) {
@@ -770,26 +778,34 @@ static char* chessboard_to_str(const Chessboard* board){
     char* fen = (char*)malloc(sizeof(char) * 100);
     int index = 0;
     int emptyCount = 0;
-    for(int i = 63; i >= 0; i--){
-        if(board->board[i] != '0'){
-            if(emptyCount > 0){
-                fen[index++] = emptyCount + '0';
+    char board2D[8][8];
+    for (int i = 0; i < 64; ++i) {
+        int row, col;
+        index1DTo2D(i, &row, &col);
+        board2D[row][col] = board->board[i];
+    }
+    
+    for (int rank = 7; rank >= 0; rank--) {
+        for (int file = 0; file < 8; file++) {
+            int i = rank * 8 + file;  // Convertir les indices 2D en indice 1D
+            if (board2D[rank][file] != '0') {
+                if (emptyCount > 0) {
+                    fen[index++] = emptyCount + '0';
+                    emptyCount = 0;
+                }
+                fen[index++] = board2D[rank][file];
+            } else {
+                emptyCount++;
+            }
+            // Nouvelle colonne
+            if (file == 7) {
+                if (emptyCount > 0)
+                    fen[index++] = emptyCount + '0';
+                if (file > 0 && rank >0 )
+                    fen[index++] = '/';
                 emptyCount = 0;
             }
-            fen[index++] = board->board[i];
-            
-        }else{
-            emptyCount++;
         }
-        //new file
-        if(i % 8 == 0){
-            if(emptyCount > 0)
-                fen[index++] = emptyCount + '0';
-            if(i > 0)
-                fen[index++] = '/';
-            emptyCount = 0;
-        }
-
     }
 
     fen[index++] = ' ';
@@ -819,19 +835,27 @@ static char* chessboard_to_str(const Chessboard* board){
 }
 
 
-void index1DTo2D(int index, int *row, int *col) {
-    *row = index / 8;
-    *col = index % 8;
-}
 
-// Convertit un indice 2D en indice 1D
-int index2DTo1D(int row, int col) {
-    return row * 8 + col;
+
+void removeLetterFromCastling(Chessboard* board, char letterToRemove) {
+    int length = strlen(board->castling);
+    int found = 0;
+
+    for (int i = 0; i < length; i++) {
+        if (board->castling[i] == letterToRemove) {
+            found = 1;
+        } else if (found) {
+            board->castling[i - 1] = board->castling[i];
+        }
+    }
+
+    if (found) {
+        board->castling[length - 1] = '\0';
+    }
 }
 
 static bool chessboard_update(Chessboard* board, const SANmove* s, char constPlayer){
-  // Convertit le tableau 1D en tableau 2D
-    char board2D[8][8];
+  char board2D[8][8];
     for (int i = 0; i < 64; ++i) {
         int row, col;
         index1DTo2D(i, &row, &col);
@@ -859,6 +883,59 @@ static bool chessboard_update(Chessboard* board, const SANmove* s, char constPla
       ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
       errmsg("invalid move %c: file : %i rank: %i",  board2D[0][0], file, s->rank)));
     }*/
+
+        if(constPlayer == 'w'){
+          if(sanmove_to_str(s) == "O-O-O"){
+                if(board2D[0][4] == 'K' && board2D[0][3] == '0' && board2D[0][2] == '0' && board2D[0][1] == '0' && board2D[0][0] == 'R'){
+                  board2D[0][4] = '0';
+                  board2D[0][0] = '0';
+                  board2D[0][2] = 'K';
+                  board2D[0][3] = 'R';
+                  removeLetterFromCastling(board, 'K');
+                  removeLetterFromCastling(board, 'Q');
+                  move = true;
+                }
+              }
+
+              if(sanmove_to_str(s) == "O-O"){
+                if(board2D[0][4] == 'K' && board2D[0][5] == '0' && board2D[0][6] == '0' && board2D[0][7] == 'R'){
+                  board2D[0][7] = '0';
+                  board2D[0][6] = 'K';
+                  board2D[0][5] = 'R';
+                  board2D[0][4] = '0';
+                  removeLetterFromCastling(board, 'K');
+                  removeLetterFromCastling(board, 'Q');
+                  move = true;
+                }
+              }
+        }
+              
+        if(constPlayer == 'b'){
+          if(sanmove_to_str(s) == "O-O-O"){
+                if(board2D[7][4] == 'k' && board2D[7][3] == '0' && board2D[7][2] == '0' && board2D[7][1] == '0' && board2D[7][0] == 'r'){
+                  board2D[7][4] = '0';
+                  board2D[7][0] = '0';
+                  board2D[7][2] = 'k';
+                  board2D[7][3] = 'r';
+                  removeLetterFromCastling(board, 'k');
+                  removeLetterFromCastling(board, 'q');
+                  move = true;
+                }
+              }
+
+              if(sanmove_to_str(s) == "O-O"){
+                if(board2D[7][4] == 'k' && board2D[7][5] == '0' && board2D[7][6] == '0' && board2D[7][7] == 'r'){
+                  board2D[7][7] = '0';
+                  board2D[7][6] = 'k';
+                  board2D[7][5] = 'r';
+                  board2D[7][4] = '0';
+                  removeLetterFromCastling(board, 'k');
+                  removeLetterFromCastling(board, 'q');
+                  move = true;
+                }
+              }
+        }
+              
     
     for(int i = 0; i <8; i++){
       for(int j =0; j<8;j++){
@@ -1070,12 +1147,45 @@ static bool chessboard_update(Chessboard* board, const SANmove* s, char constPla
                     board2D[i][j] = '0';
                     board2D[s->rank-1][file] = piece_to_find;
                     move = true;
+                    if(constPlayer == 'w'){
+                      if(i == 0 && j == 0){
+                        removeLetterFromCastling(board, 'Q');
+                      }
+                      if(i == 0 && j == 7){
+                        removeLetterFromCastling(board, 'K');
+                      }
+                    }
+
+                    if(constPlayer == 'b'){
+                      if(i == 7 && j == 0){
+                        removeLetterFromCastling(board, 'q');
+                      }
+                      if(i == 7 && j == 7){
+                        removeLetterFromCastling(board, 'k');
+                      }
+                    }
                   }
                 }else{
                   //possible move for this piece
                   board2D[i][j] = '0';
                   board2D[s->rank-1][file] = piece_to_find;
                   move = true;
+                  if(constPlayer == 'w'){
+                      if(i == 0 && j == 0){
+                        removeLetterFromCastling(board, 'Q');
+                      }
+                      if(i == 0 && j == 7){
+                        removeLetterFromCastling(board, 'K');
+                      }
+                    }
+                    if(constPlayer == 'b'){
+                      if(i == 7 && j == 0){
+                        removeLetterFromCastling(board, 'q');
+                      }
+                      if(i == 7 && j == 7){
+                        removeLetterFromCastling(board, 'k');
+                      }
+                    }
                 }
               }
             }
@@ -1619,6 +1729,9 @@ static bool chessboard_update(Chessboard* board, const SANmove* s, char constPla
               
             }
 
+            
+
+
             for(int itera = 0; itera< counterPossibleMove; itera++){
               if(file == possibleMove[itera][1] && (s->rank-1) == possibleMove[itera][0]){
                 if(s->from_file != '0'){
@@ -1628,12 +1741,28 @@ static bool chessboard_update(Chessboard* board, const SANmove* s, char constPla
                     board2D[i][j] = '0';
                     board2D[s->rank-1][file] = piece_to_find;
                     move = true;
+                    if(piece_to_find == 'K'){
+                      removeLetterFromCastling(board, 'K');
+                      removeLetterFromCastling(board, 'Q');
+                    }
+                    if(piece_to_find == 'k'){
+                      removeLetterFromCastling(board, 'k');
+                      removeLetterFromCastling(board, 'q');
+                    }
                   }
                 }else{
                   //possible move for this piece
                   board2D[i][j] = '0';
                   board2D[s->rank-1][file] = piece_to_find;
                   move = true;
+                  if(piece_to_find == 'K'){
+                      removeLetterFromCastling(board, 'K');
+                      removeLetterFromCastling(board, 'Q');
+                  }
+                  if(piece_to_find == 'k'){
+                    removeLetterFromCastling(board, 'k');
+                    removeLetterFromCastling(board, 'q');
+                  }
                 }
               }
             }
@@ -1643,31 +1772,23 @@ static bool chessboard_update(Chessboard* board, const SANmove* s, char constPla
     }
 
     
+
     
+ 
+  if(constPlayer == 'b'){
+    board->halfMoveClock = 1;
+     board->fullMoveNumber ++;
+  }
+
+   if(constPlayer == 'w'){
+    board->halfMoveClock = 0;
+  }
 
   for (int row = 0; row < 8; ++row) {
     for (int col = 0; col < 8; ++col) {
       int index = index2DTo1D(row, col);
       board->board[index] = board2D[row][col];
-      // if(piece_to_find == 'N' && index == 6){
-      //               /*char* result = (char*)malloc(sizeof(char) * 65);  
-      //               int index = 0;
-
-      //               for (int i = 0; i < 8; i++) {
-      //                   for (int j = 0; j < 8; j++) {
-      //                       result[index++] = board2D[i][j];
-      //                   }
-      //               }
-      //               char * sanStr = (char*)malloc(sizeof(char) * 4);
-      //               sanStr = sanmove_to_str(&s);
-      //               result[index] = '\0'; 
-      //               if(index != 0){
-      //                 ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-      //                 errmsg("test board at move : %s , array : %s",  sanStr, result)));
-      //               } */
-      //               ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-      //               errmsg("invalid move board2d %c  board1d %c: file : %i rank: %i, row %i , col %i",  board2D[0][6], board->board[index], file, s->rank, row, col)));
-      //             }
+      
     }
   }
 
@@ -1676,6 +1797,30 @@ static bool chessboard_update(Chessboard* board, const SANmove* s, char constPla
 
 }
 
+
+Chessboard* getBoardPrivate(Chessgame* chessgame, int32 half_moves) {
+    // Check and extract function arguments
+    if (!chessgame) {
+        return nullptr;
+    }
+
+  
+    Chessgame_helper* c_helper = chessgame_helper_parse(chessgame->game);
+    Chessboard* boardState = chessboard_make("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    for(int i =0; i < half_moves;i++){
+      //white move
+      if(!chessboard_update(boardState ,&c_helper->moves[i][0], 'w')){
+        return nullptr;
+      }
+      //black move
+      if(!chessboard_update(boardState , &c_helper->moves[i][1], 'b' )){
+        return nullptr;
+      }
+
+    }
+
+   return boardState;
+}
 /*****************************************************************************/
 
 
@@ -1794,47 +1939,50 @@ Datum getBoard(PG_FUNCTION_ARGS) {
         ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
         errmsg("invalid move %s: \"%s\" piece : %c , rank : %i, file : %i, from rank : %i, from file : %i", "chessboard cannot be update",  sanmove_to_str(&c_helper->moves[i][0]), toupper(c_helper->moves[i][0].piece), c_helper->moves[i][0].rank, c_helper->moves[i][0].file - 'a', c_helper->moves[i][0].from_rank, c_helper->moves[i][0].from_file -'a')));
       }
+       
       //black move
       if(!chessboard_update(boardState , &c_helper->moves[i][1], 'b')){
         ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
         errmsg("invalid move %s: \"%s\" piece : %c , rank : %i, file : %i", "chessboard cannot be update",  sanmove_to_str(&c_helper->moves[i][1]), c_helper->moves[i][1].piece, c_helper->moves[i][1].rank, c_helper->moves[i][1].file - 'a')));
       }
+
     }
 
-    // if (result != 0) {
-    //     ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
-    // }
 
-    // // Convert the FEN string to a PostgreSQL text type
-    // text *fen_text = cstring_to_text(fen);
-
-    // Return the FEN representation of the board state
    PG_RETURN_CHESSBOARD_P(boardState);
 }
 
-/*PG_FUNCTION_INFO_V1(hasBoard);
+PG_FUNCTION_INFO_V1(hasBoard);
 Datum hasBoard(PG_FUNCTION_ARGS) {
-    if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2)) {
+    if (PG_ARGISNULL(0) ||  PG_ARGISNULL(1) ||  PG_ARGISNULL(2)) {
         ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
     }
 
-    Chessgame *chessgame = PG_GETARG_CHESSGAME_P(0);
-    Chessboard *chessboard = PG_GETARG_CHESSBOARD_P(1);
-    int32 half_moves = PG_GETARG_INT32(2);
+    Chessgame* chessgame = PG_GETARG_CHESSGAME_P(0);
+    Chessboard* chessboard = PG_GETARG_CHESSBOARD_P(1);
+    /*ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        errmsg("invalid move %s: \"%s\"", "chessboard cannot be update", )));*/
+    int32 half_moves = PG_GETARG_INT32(2); 
+ 
+    bool ret_val = false; 
 
-    // Convert text input to C string
-    char *chessgame_text = chessgame_to_str(chessgame);
-     char *chessboard_text = chessboard_to_str(chessboard);
 
     if (half_moves < 0) {
         ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("Invalid half-move count")));
     }
+    Chessboard* chessboard_aftermove = getBoardPrivate(chessgame,half_moves);
+    // I assume that getBoard will return null if the halfmoves invalid
+    if (chessboard_aftermove)
+    {
+        char* chessboard_text = chessboard_to_str(chessboard);
+        char *chessboard_aftermove_text = chessboard_to_str(chessboard_aftermove);
 
-    char *chessgame_str = text_to_cstring(chessgame_text);
-    char *chessboard_str = text_to_cstring(chessboard_text);
-
-    // Check if the chess game contains the given board state in its initial N half-moves
-    bool contains_board_state = smallchesslib_contains_board_state(chessgame_str, chessboard_str, half_moves);
-
-    PG_RETURN_BOOL(contains_board_state);
-}*/
+        // Comparing chessboard_text and chessboard_aftermove_text if there is no 
+        //differences between them then ret_val becomes true, so the function does
+        if (strcmp(chessboard_text,chessboard_aftermove_text) == 0)
+        {
+            ret_val = true;
+        }
+    }
+    PG_RETURN_BOOL(ret_val);
+}
