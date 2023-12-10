@@ -515,6 +515,11 @@ hasOpening(PG_FUNCTION_ARGS)
 
 /*****************************************************************************/
 
+// Convertit un indice 2D en indice 1D
+int index2DTo1D(int row, int col) {
+    return row * 8 + col;
+}
+
 static Chessboard *
 chessboard_make(char *fen) {
 
@@ -699,11 +704,6 @@ static char* chessboard_to_str(const Chessboard* board){
 void index1DTo2D(int index, int *row, int *col) {
     *row = index / 8;
     *col = index % 8;
-}
-
-// Convertit un indice 2D en indice 1D
-int index2DTo1D(int row, int col) {
-    return row * 8 + col;
 }
 
 static bool chessboard_update(Chessboard* board, const SANmove* s, char constPlayer){
