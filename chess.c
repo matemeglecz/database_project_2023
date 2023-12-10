@@ -680,7 +680,7 @@ static char* chessboard_to_str(const Chessboard* board){
             if (file == 7) {
                 if (emptyCount > 0)
                     fen[index++] = emptyCount + '0';
-                if (file > 0)
+                if (file > 0 && rank >0 )
                     fen[index++] = '/';
                 emptyCount = 0;
             }
@@ -1711,16 +1711,16 @@ Chessboard* getBoardPrivate(Chessgame* chessgame, int32 half_moves) {
         return nullptr;
       }
 
-      if(&c_helper->moves[i][0].checkmate){
+      /*if(&c_helper->moves[i][0].checkmate){
         return boardState;
-      }
+      }*/
       //black move
       if(!chessboard_update(boardState , &c_helper->moves[i][1], 'b' )){
         return nullptr;
       }
-      if(&c_helper->moves[i][1].checkmate){
+      /*if(&c_helper->moves[i][1].checkmate){
         return boardState;
-      }
+      }*/
     }
 
     // if (result != 0) {
@@ -1831,7 +1831,7 @@ Datum chessboard_constructor(PG_FUNCTION_ARGS) {
 /*****************************************************************************/
 
 PG_FUNCTION_INFO_V1(getBoard);
-Datum getBoard(PG_FUNCTION_ARGS) {
+Datum getBoard(PG_FUNCTION_ARGS) { 
     // Check and extract function arguments
     if (PG_ARGISNULL(0) || PG_ARGISNULL(1)) {
         ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("Null values are not allowed")));
@@ -1851,7 +1851,7 @@ Datum getBoard(PG_FUNCTION_ARGS) {
         ereport(ERROR,(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
         errmsg("invalid move %s: \"%s\" piece : %c , rank : %i, file : %i, from rank : %i, from file : %i", "chessboard cannot be update",  sanmove_to_str(&c_helper->moves[i][0]), toupper(c_helper->moves[i][0].piece), c_helper->moves[i][0].rank, c_helper->moves[i][0].file - 'a', c_helper->moves[i][0].from_rank, c_helper->moves[i][0].from_file -'a')));
       }
-      
+       
       /*if(!&c_helper->moves[i][0].checkmate){
          PG_RETURN_CHESSBOARD_P(boardState);
       }*/
